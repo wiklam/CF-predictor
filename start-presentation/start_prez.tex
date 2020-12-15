@@ -1,0 +1,92 @@
+%TODO
+%Wystąpienie w piątek
+
+\documentclass{beamer}
+\usetheme{Warsaw}
+\setbeamertemplate{navigation symbols}{}
+
+\usepackage{amsthm}
+\usepackage{amssymb}
+\usepackage{amsmath}
+\usepackage{mathrsfs}
+\usepackage{mathtools}
+
+\usepackage{algorithm}
+\usepackage{algorithmicx}
+\usepackage[noend]{algpseudocode}
+\usepackage{algpseudocode}
+
+\usepackage{tikz}
+\usepackage{tkz-graph}
+\usetikzlibrary{matrix}
+\usetikzlibrary{arrows.meta}
+
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage[utf8]{inputenc}
+
+\algnewcommand{\algorithmicand}{\textbf{ and }}
+\algnewcommand{\algorithmicor}{\textbf{ or }}
+\algnewcommand{\OR}{\algorithmicor}
+\algnewcommand{\AND}{\algorithmicand}
+\newcommand{\Oh}{\mathcal{O}}
+\newcommand{\Ohtilda}{\tilde{\Oh}}
+\newcommand{\eps}{\varepsilon}
+\algnewcommand{\LineComment}[1]{\State \(\triangleright\) #1}
+
+\newcommand{\countelem}{\textsf{cnt}}
+
+\title[Machine Learning]{CF Predictor}
+\subtitle{Rating Predictor for Codeforces}
+\author[CF Predictor]{Anadi Agrawal, Hubert Obrzut, Wiktor Pilarczyk i Michał Syposz}
+\institute{Uniwersytet Wrocławski}
+\date{\today}
+
+\begin{document}
+
+\begin{frame}
+\titlepage
+\end{frame}
+
+
+
+\begin{frame}
+\frametitle{Why codeforces?}
+
+\begin{itemize}
+	\item<1-> The world's largest platform for programming;
+	\item<2-> A lot of data to process;
+	\item<3-> Great access to data via Codeforces API;
+	\item<4-> There is a need for such a tool for this website.
+\end{itemize}
+
+\end{frame}
+
+
+
+
+
+\begin{frame}
+\frametitle{Rating predictor}
+
+\begin{exampleblock}{Codeforces's rating}
+Codeforces uses rating's system is somehow similar to the ELO used in chess. 
+Once for a while, Codeforces hosts the round after which the rating is recalculated based on results achieved by each participant.
+\end{exampleblock}
+
+\onslide<2->{
+\begin{block}{What do we want to do?}
+	We want to be able to predict the outcome of the round, i.e. before the round, for a specific user, to predict his ratings' change based on specific factors:
+	\begin{itemize}
+		\item<3-> Current form of the participant;
+		\item<4-> The authors of this round;
+		\item<5-> The time when the round is hosted;
+		\item<6-> The length of the round.
+	\end{itemize}
+\end{block}}
+
+\end{frame}
+
+
+
+\end{document}
