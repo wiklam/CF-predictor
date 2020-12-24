@@ -3,7 +3,7 @@ import json
 import pickle
 import time
 
-## This script allows us to create a dictionary where the username is the key
+## This script allows to create a dictionary where the username is the key
 ## and the value is a contest list with structures holding information about:
 ## contest id, contest place, time of rating update, previous rating, new rating
 
