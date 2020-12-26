@@ -51,7 +51,7 @@ class DBClass:
         return [cntst.contestId for cntst in self.users[nick]]
 
 
-def RequestStatusOk(res):
+def GetRequestStatusOk(res):
     if res["status"] != "OK":
         return False
     return True
@@ -137,7 +137,7 @@ def UserFetch():
 
         usercntst = ContestRatingInfo(usercntst)
         res[userName] = usercntst
-        break
+        
     with open('user-info.pickle', 'wb') as outfile:
         pickle.dump(res, outfile)
 
