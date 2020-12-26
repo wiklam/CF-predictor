@@ -69,14 +69,14 @@ def GetRequest(method):
 
 def GetUserContestHistory(user):
     res = GetRequest("user.rating?handle=" + user)
-    if(RequestStatusOk(res) == False):
+    if(GetRequestStatusOk(res) == False):
         return None
     return GetRequestBody(res)
 
 
 def GetActiveUsers():
     res = GetRequest("user.ratedList?activeOnly=true")
-    if(RequestStatusOk(res) == False):
+    if(GetRequestStatusOk(res) == False):
         print("Couldn't download active users")
         quit()
     return GetRequestBody(res)
@@ -84,7 +84,7 @@ def GetActiveUsers():
 
 def GetContestsList():
     res = GetRequest("contest.list?gym=false")
-    if(RequestStatusOk(res) == False):
+    if(GetRequestStatusOk(res) == False):
         print("Couldn't download active users")
         quit()
     res = GetRequestBody(res)
