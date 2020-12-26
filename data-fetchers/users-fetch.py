@@ -5,79 +5,91 @@ import time
 
 ## This script allows to create a dictionary where the username is the key
 ## and the value is a contest list with structures holding information about:
-## contest id, contest place, time of rating update, previous rating, new rating
+## contest id, contest place, time of rating update, previous rating, new rating.
+## We consider only users who participated in at least MIN_CONTESTS. 
 
-cnt = lasttime = now = 0
+
+MAX_API_REQUESTS = 5
+API_REQUESTS_INTERVAL = 1
+MIN_CONTESTS = 5
 
 
-def GetChecker(res):
+def RequestStatusOk(res):
     if res["status"] != "OK":
         return False
     return True
 
 
-def GetResult(res):
+def GetRequestBody(res):
     return res["result"]
 
 
 def GetRequest(method):
-    global cnt 
-    cnt += 1
+    BlockAPICalls()
     res = requests.get("https://codeforces.com/api/" + method)
     return res.json()
 
 
-def GetUserRating(user):
+def GetUserContestHistory(user):
     res = GetRequest("user.rating?handle=" + user)
-    if(GetChecker(res) == False):
+    if(RequestStatusOk(res) == False):
         return None
-    return GetResult(res)
+    return GetRequestBody(res)
 
 
 def GetActiveUsers():
     res = GetRequest("user.ratedList?activeOnly=true")
-    if(GetChecker(res) == False):
+    if(RequestStatusOk(res) == False):
         print("Couldn't download active users")
         quit()
-    return GetResult(res)
+    return GetRequestBody(res)
 
+def ContestInfo(usercntst):
+    [info.pop('handle') for info in usercntst]
+    [info.pop('contestName') for info in usercntst]
+    [info.pop('ratingUpdateTimeSeconds') for info in usercntst]
+    return usercntst
 
-def UserInfo(userinfo):
-    [info.pop('handle') for info in userinfo]
-    [info.pop('contestName') for info in userinfo]
-    return userinfo
+def BlockAPICalls():
+    BlockAPICalls.cnt += 1
+    if BlockAPICalls.cnt >= MAX_API_REQUESTS:
+        BlockAPICalls.now = time.time()
+        diff =  BlockAPICalls.now - BlockAPICalls.lasttime
+        if diff < API_REQUESTS_INTERVAL:
+            time.sleep(diff)
+        BlockAPICalls.cnt = 0
+        BlockAPICalls.lasttime = BlockAPICalls.now
 
-
-def AbleToCont():
-    global cnt
-    if cnt >= 4:
-        global lasttime, now
-        now = time.time()
-        if now - lasttime < 1:
-            time.sleep(now-lasttime)
-        cnt = 0
-        lasttime = now
+BlockAPICalls.cnt = 5
+BlockAPICalls.lasttime = time.time()
+BlockAPICalls.now = BlockAPICalls.lasttime
 
 
 def UserFetch():
-    lasttime = time.time()
     res = {}
     users = GetActiveUsers()
+    leftusers = len(users)
+
     for user in users:
-        user = user['handle']
-        userinfo = GetUserRating(user)
-        if userinfo == None:
-            #print("PROBLEM WITH " + user)
+        leftusers -= 1
+        userName = user['handle']
+        usercntst = GetUserContestHistory(userName)
+        print(str(leftusers) + " " + userName)
+
+        if usercntst == None:
+            print("PROBLEM WITH " + userName)
             with open('error-users.json', 'a') as outfile:
-                json.dump(user, outfile)
+                json.dump(userName, outfile)
             continue
-        userinfo = UserInfo(userinfo)
-        res[user] = userinfo
-        #print(user + " done")
-        AbleToCont()
+
+        elif len(usercntst) < MIN_CONTESTS:
+            continue
+
+        usercntst = ContestInfo(usercntst)
+        res[userName] = usercntst
+
     with open('user-info.pickle', 'wb') as outfile:
         pickle.dump(res, outfile)
-  
+
 
 UserFetch()
-
