@@ -14,7 +14,15 @@ API_REQUESTS_INTERVAL = 1
 MIN_CONTESTS = 5
 
 
-class ContestClass:
+class ContestRatingClass:
+    def __init__(self, contest):
+        self.contestId = contest["contestId"]
+        self.rank = contest["rank"]
+        self.oldRating = contest["oldRating"]
+        self.newRating = contest["newRating"]
+
+
+class ContestInfoClass:
     def __init__(self, contest):
         self.type = contest["type"]
         self.duration = contest["durationSeconds"]
@@ -26,6 +34,21 @@ class ContestClass:
             self.author = contest["preparedBy"]
         else:
             self.author = None
+
+
+class DBClass:
+    def __init__(self, users, contests):
+        self.contests = contests
+        self.users = users
+
+    def getUsers(self):
+        return self.users.keys()
+    
+    def getContestsId(self):
+        return self.contests.keys()
+
+    def getUserContests(self, nick):
+        return [cntst.contestId for cntst in self.users[nick]]
 
 
 def RequestStatusOk(res):
@@ -71,11 +94,11 @@ def GetContestsList():
     return res
 
 
-def ContestInfo(usercntst):
-    [info.pop('handle') for info in usercntst]
-    [info.pop('contestName') for info in usercntst]
-    [info.pop('ratingUpdateTimeSeconds') for info in usercntst]
-    return usercntst
+def ContestRatingInfo(usercntst):
+    [cntst.pop('handle') for cntst in usercntst]
+    [cntst.pop('contestName') for cntst in usercntst]
+    [cntst.pop('ratingUpdateTimeSeconds') for cntst in usercntst]
+    return [ContestRatingClass(cntst) for cntst in usercntst]
 
 def BlockAPICalls():
     BlockAPICalls.cnt += 1
@@ -112,9 +135,9 @@ def UserFetch():
         elif len(usercntst) < MIN_CONTESTS:
             continue
 
-        usercntst = ContestInfo(usercntst)
+        usercntst = ContestRatingInfo(usercntst)
         res[userName] = usercntst
-
+        break
     with open('user-info.pickle', 'wb') as outfile:
         pickle.dump(res, outfile)
 
@@ -125,11 +148,23 @@ def ContestFetch():
     
     for cntst in contests:
         contestId = cntst['id']
-        res[contestId] = ContestClass(cntst)
+        res[contestId] = ContestInfoClass(cntst)
 
     with open('contest-info.pickle', 'wb') as outfile:
         pickle.dump(res, outfile)
 
 
+def CreateDataBase():
+    users = contests = None
+    with open('user-info.pickle', 'rb') as outfile:
+        users = pickle.load(outfile)
+    with open('contest-info.pickle', 'rb') as outfile:
+        contests = pickle.load(outfile)
+    DB = DBClass(users, contests)
+    with open('users-DB.pickle', 'wb') as outfile:
+        pickle.dump(DB, outfile)
+
+
 UserFetch()
 ContestFetch()
+CreateDataBase()
