@@ -14,6 +14,20 @@ API_REQUESTS_INTERVAL = 1
 MIN_CONTESTS = 5
 
 
+class ContestClass:
+    def __init__(self, contest):
+        self.type = contest["type"]
+        self.duration = contest["durationSeconds"]
+        if hasattr(contest, "startTimeSeconds"):
+            self.startTime = contest["startTimeSeconds"]
+        else:
+            self.author = None
+        if hasattr(contest, "preparedBy"):
+            self.author = contest["preparedBy"]
+        else:
+            self.author = None
+
+
 def RequestStatusOk(res):
     if res["status"] != "OK":
         return False
@@ -43,6 +57,19 @@ def GetActiveUsers():
         print("Couldn't download active users")
         quit()
     return GetRequestBody(res)
+
+
+def GetContestsList():
+    res = GetRequest("contest.list?gym=false")
+    if(RequestStatusOk(res) == False):
+        print("Couldn't download active users")
+        quit()
+    res = GetRequestBody(res)
+    for cntst in res:
+        if cntst["phase"] != "FINISHED":
+            res.remove(cntst)
+    return res
+
 
 def ContestInfo(usercntst):
     [info.pop('handle') for info in usercntst]
@@ -74,7 +101,7 @@ def UserFetch():
         leftusers -= 1
         userName = user['handle']
         usercntst = GetUserContestHistory(userName)
-        print(str(leftusers) + " " + userName)
+        print("Users left " + str(leftusers) + " " + userName)
 
         if usercntst == None:
             print("PROBLEM WITH " + userName)
@@ -92,4 +119,17 @@ def UserFetch():
         pickle.dump(res, outfile)
 
 
+def ContestFetch():
+    res = {}
+    contests = GetContestsList()
+    
+    for cntst in contests:
+        contestId = cntst['id']
+        res[contestId] = ContestClass(cntst)
+
+    with open('contest-info.pickle', 'wb') as outfile:
+        pickle.dump(res, outfile)
+
+
 UserFetch()
+ContestFetch()
