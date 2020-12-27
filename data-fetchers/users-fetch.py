@@ -5,7 +5,9 @@ import time
 
 ## This script allows to create a dictionary where the username is the key
 ## and the value is a contest list with structures holding information about:
-## contest id, contest place, time of rating update, previous rating, new rating.
+## contest ID, contest place, previous rating, new rating and a second one (dictionary)
+## which keys are contest IDs holding information about contest type, duration and if 
+## suitable start date (in seconds) and contest author.
 ## We consider only users who participated in at least MIN_CONTESTS. 
 
 
@@ -14,7 +16,7 @@ API_REQUESTS_INTERVAL = 1
 MIN_CONTESTS = 5
 
 
-class ContestRatingClass:
+class UserContestRatingClass:
     def __init__(self, contest):
         self.contestId = contest["contestId"]
         self.rank = contest["rank"]
@@ -29,14 +31,15 @@ class ContestInfoClass:
         if hasattr(contest, "startTimeSeconds"):
             self.startTime = contest["startTimeSeconds"]
         else:
-            self.author = None
+            self.startTime = None
         if hasattr(contest, "preparedBy"):
             self.author = contest["preparedBy"]
         else:
             self.author = None
 
 
-class DBClass:
+## 
+class UsersContestsDBClass:
     def __init__(self, users, contests):
         self.contests = contests
         self.users = users
@@ -85,7 +88,7 @@ def GetActiveUsers():
 def GetContestsList():
     res = GetRequest("contest.list?gym=false")
     if(GetRequestStatusOk(res) == False):
-        print("Couldn't download active users")
+        print("Couldn't download contest list")
         quit()
     res = GetRequestBody(res)
     for cntst in res:
@@ -98,7 +101,7 @@ def ContestRatingInfo(usercntst):
     [cntst.pop('handle') for cntst in usercntst]
     [cntst.pop('contestName') for cntst in usercntst]
     [cntst.pop('ratingUpdateTimeSeconds') for cntst in usercntst]
-    return [ContestRatingClass(cntst) for cntst in usercntst]
+    return [UserContestRatingClass(cntst) for cntst in usercntst]
 
 def BlockAPICalls():
     BlockAPICalls.cnt += 1
@@ -160,7 +163,7 @@ def CreateDataBase():
         users = pickle.load(outfile)
     with open('contest-info.pickle', 'rb') as outfile:
         contests = pickle.load(outfile)
-    DB = DBClass(users, contests)
+    DB = UsersContestsDBClass(users, contests)
     with open('users-DB.pickle', 'wb') as outfile:
         pickle.dump(DB, outfile)
 
