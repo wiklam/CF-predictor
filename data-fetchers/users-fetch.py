@@ -8,7 +8,7 @@ import time
 ## contest ID, contest place, previous rating, new rating and a second one (dictionary)
 ## which keys are contest IDs holding information about contest type, duration and if 
 ## suitable start date (in seconds) and contest author.
-## We consider only users who participated in at least MIN_CONTESTS. 
+## We consider only users who participated in at least MIN_CONTESTS.
 
 
 MAX_API_REQUESTS = 5
@@ -38,7 +38,6 @@ class ContestInfoClass:
             self.author = None
 
 
-## 
 class UsersContestsDBClass:
     def __init__(self, users, contests):
         self.contests = contests
@@ -67,6 +66,9 @@ def GetRequestBody(res):
 def GetRequest(method):
     BlockAPICalls()
     res = requests.get("https://codeforces.com/api/" + method)
+    if not(res):
+        print("Unexpected status code: " + str(res.status_code))
+        quit()
     return res.json()
 
 
