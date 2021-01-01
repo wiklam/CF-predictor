@@ -28,11 +28,11 @@ class ContestInfoClass:
     def __init__(self, contest):
         self.type = contest["type"]
         self.duration = contest["durationSeconds"]
-        if hasattr(contest, "startTimeSeconds"):
+        if "startTimeSeconds" in contest:
             self.startTime = contest["startTimeSeconds"]
         else:
             self.startTime = None
-        if hasattr(contest, "preparedBy"):
+        if "preparedBy" in contest:
             self.author = contest["preparedBy"]
         else:
             self.author = None
