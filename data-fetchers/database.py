@@ -52,6 +52,9 @@ class UserContestRatingClass:
         self.oldRating = contest["oldRating"]
         self.newRating = contest["newRating"]
 
+    def delta(self):
+        return self.newRating - self.oldRating
+
     def __str__(self):
         return 'contestId: %d, rank: %d, oldRating: %d, newRating: %d' % (
                 self.contestId, self.rank, self.oldRating, self.newRating)
@@ -120,12 +123,21 @@ class UsersContestsDBClass:
     def getUserContests(self, nick):
         return [cntst.contestId for cntst in self.contestHistory[nick]]
 
-    def getAuthors(self):
-        res = set()
-        for contest in self.contests.values():
+    def getAllAuthors(self):
+        authors = set()
+        for contest in self.contest.values():
             if contest.authors:
-                res.update(set(contest.authors))
-        return res
+                authors.update(set(contest.authors))
+        return authors
+
+    def getUserAuthors(self, nick):
+        authors = set()
+        history = self.contestHistory[nick]
+        for entry in history:
+            contest = self.contests[entry.contestId]
+            if contest.authors:
+                authors.update(set(contest.authors))
+        return authors
 
 
 def GetRequestStatusOk(res):
@@ -276,10 +288,46 @@ def CreateDataBase():
         pickle.dump(DB, outfile)
 
 
-def LoadDataBase():
+def CleanDataBase(DB):
+    # add MikeMirzayanov
+    admin = "MikeMirzayanov"
+    DB.users[admin] = {
+        "handle": admin,
+        "country": "Russia",
+        "city": "Saratov",
+        "contribution": 256,
+        "rating": 0,
+        "maxRating": 0
+    }
+
+    # remove authors not in our database
+    for contest in DB.contests.values():
+        if contest.authors:
+            contest.authors = [author for author in contest.authors if author in DB.users]
+
+    # remove contests with no authors
+    DB.contests = {cId: contest for cId, contest in DB.contests.items() if contest.authors}
+
+    # authors as set
+    for contest in DB.contests.values():
+        contest.authors = set(contest.authors)
+
+    # remove contests with no startTime
+    DB.contests = {cId: contest for cId, contest in DB.contests.items() if contest.startTime}
+
+    # remove non existing contest from contestHistory
+    for user, history in DB.contestHistory.items():
+        DB.contestHistory[user] = [entry for entry in history if entry.contestId in DB.contests]
+
+    return DB
+    
+
+def LoadDataBase(clean=True):
     DB = None
     with open('database.pickle', 'rb') as outfile:
         DB = pickle.load(outfile)
+    if clean:
+        DB = CleanDataBase(DB)
     return DB
 
 
