@@ -187,7 +187,7 @@ def FindAuthors(contestId):
     res = requests.get(url)
     content = res.text
     soup = bs(content, "html.parser")
-    return [tag.text for tag in soup.findAll("a", {"class", re.compile("rated-user*")})]
+    return [tag.text for tag in soup.findAll("a", {"class": re.compile("rated-user*")})]
 
 
 def GetContestsList():
