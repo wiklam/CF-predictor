@@ -67,7 +67,7 @@ class ContestInfoClass:
         if "preparedBy" in contest:
             self.authors = [contest["preparedBy"]]
         else:
-            self.authors = findAuthors(contest["id"])
+            self.authors = FindAuthors(contest["id"])
 
     def __str__(self):
         res = 'duration: %dh %02dm' % (self.duration // 3600, self.duration % 3600 // 60)
@@ -163,7 +163,7 @@ def GetAllUsers():
     return GetRequestBody(res)
 
 
-def findAuthors(contestId):
+def FindAuthors(contestId):
     url = "http://codeforces.com/contests/" + str(contestId)
     res = requests.get(url)
     content = res.text
