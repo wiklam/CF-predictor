@@ -108,7 +108,7 @@ class UsersContestsDBClass:
         self.contests = contests
         self.contestHistory = contestHistory
 
-    def getUsers(self):
+    def getAllUsers(self):
         return self.users.keys()
 
     def getActiveUsers(self):
@@ -119,6 +119,13 @@ class UsersContestsDBClass:
 
     def getUserContests(self, nick):
         return [cntst.contestId for cntst in self.contestHistory[nick]]
+
+    def getAuthors(self):
+        res = set()
+        for contest in self.contests.values():
+            if contest.authors:
+                res.update(set(contest.authors))
+        return res
 
 
 def GetRequestStatusOk(res):
