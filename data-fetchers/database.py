@@ -52,7 +52,7 @@ class UserContestRatingClass:
         self.oldRating = contest["oldRating"]
         self.newRating = contest["newRating"]
 
-    def delta():
+    def delta(self):
         return self.newRating - self.oldRating
 
     def __str__(self):
