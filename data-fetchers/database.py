@@ -123,7 +123,12 @@ class UsersContestsDBClass:
     def getUserContests(self, nick):
         if nick in self.contestHistory:
             return [cntst.contestId for cntst in self.contestHistory[nick]]
-        return None
+        return []
+    
+    def getUserContestsInfo(self, nick):
+        if nick in self.contestHistory:
+            return self.contestHistory[nick]
+        return []
 
     def getAllAuthors(self):
         authors = set()
