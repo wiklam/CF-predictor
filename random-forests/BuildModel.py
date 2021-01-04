@@ -1,6 +1,7 @@
 import sys
 import pickle
 import pandas as pd
+import numpy as np
 sys.path.insert(1, '/home/anadi/General/Studia/ML/projekt/CF-predictor/data-fetchers')
 
 from database import UserContestRatingClass
@@ -96,14 +97,22 @@ def ReadUserData():
     return DB
 
 def saveErrors(xs, ys, name, save = False):
-    zs = [abs(xs[s] - ys[s]) for s in range(len(xs))]
+    xs = np.array(xs)
+    ys = np.array(ys)
+
+    zs = abs(xs - ys)
     avgErr = sum(zs) / len(zs)
     print('Average error is %.10lf' % avgErr)
 
-    plt.scatter(xs, ys)
+    b, m = np.polynomial.polynomial.polyfit(xs, ys, 1)
+    plt.plot(xs, ys, '.')
+    plt.plot(xs, b + m * xs, 'r-')
+    plt.plot(xs, xs, 'b-')
     plt.title(name)
     plt.xlabel('Expected change by Predictor')
     plt.ylabel('True change')
+
+
 
     if save == True:
         plt.savefig('drawings/%s.png' % name)
