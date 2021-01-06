@@ -59,6 +59,9 @@ class UserContestRatingClass:
         return 'contestId: %d, rank: %d, oldRating: %d, newRating: %d' % (
                 self.contestId, self.rank, self.oldRating, self.newRating)
 
+    def __repr__(self):
+        return str(self)
+
 
 class ContestInfoClass:
     def __init__(self, contest):
@@ -79,6 +82,9 @@ class ContestInfoClass:
         if self.authors:
             res += ', authors: %s' % (str(self.authors))
         return res
+
+    def __repr__(self):
+        return str(self)
 
 
 class UserInfoClass:
@@ -103,6 +109,9 @@ class UserInfoClass:
     def __str__(self):
         return 'nick: %s, country: %s, city: %s, organization: %s, contribution: %d, rating: %d, maxRating: %d' % (
                 self.nick, self.country, self.city, self.organization, self.contribution, self.rating, self.maxRating)
+
+    def __repr__(self):
+        return str(self)
 
 
 class UsersContestsDBClass:
@@ -298,14 +307,14 @@ def CreateDataBase():
 def CleanDataBase(DB):
     # add MikeMirzayanov
     admin = "MikeMirzayanov"
-    DB.users[admin] = {
+    DB.users[admin] = UserInfoClass({
         "handle": admin,
         "country": "Russia",
         "city": "Saratov",
         "contribution": 256,
         "rating": 0,
         "maxRating": 0
-    }
+    })
 
     # remove authors not in our database
     for contest in DB.contests.values():
