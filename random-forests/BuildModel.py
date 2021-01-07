@@ -1,3 +1,8 @@
+# For proper running, ensure that there is
+# a database.py and database.pickle (or their symlinks)
+# in a given folder
+# If run the first time, start with SaveUserDatabase
+
 import pickle
 import pandas as pd
 import numpy as np

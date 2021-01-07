@@ -26,7 +26,11 @@ class Forest:
             if verbose == 1:
                 print('done %d' % i)
 
-    def QueryPref(self, queryObj, pref):
+    def Query(self, queryObj, **kwargs):
+        if "pref" not in kwargs:
+            kwargs["pref"] = self.treeCount
+        pref = kwargs["pref"]
+        
         results = []
         for i in range(pref):
             results.append(self.trees[i].Classify(queryObj))
@@ -34,9 +38,6 @@ class Forest:
         if self.targetType == "categorical":
             return Counter(results).most_common(1)[0][0]
         return sum(results) / len(results)
-
-    def Query(self, queryObj):
-        return self.QueryPref(queryObj, self.treeCount)
     
     def __str__(self):
         return f"{self.__class__.__name__}: {self.treeCount}, {self.targetType}"
