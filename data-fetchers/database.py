@@ -121,7 +121,14 @@ class UsersContestsDBClass:
         return self.contests.keys()
 
     def getUserContests(self, nick):
-        return [cntst.contestId for cntst in self.contestHistory[nick]]
+        if nick in self.contestHistory:
+            return [cntst.contestId for cntst in self.contestHistory[nick]]
+        return []
+    
+    def getUserContestsInfo(self, nick):
+        if nick in self.contestHistory:
+            return self.contestHistory[nick]
+        return []
 
     def getAllAuthors(self):
         authors = set()
