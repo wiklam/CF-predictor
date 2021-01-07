@@ -1,8 +1,6 @@
-import sys
 import pickle
 import pandas as pd
 import numpy as np
-sys.path.insert(1, '/home/anadi/General/Studia/ML/projekt/CF-predictor/data-fetchers')
 
 from database import UserContestRatingClass
 from database import ContestInfoClass
@@ -15,7 +13,10 @@ import matplotlib.pyplot as plt
 
 DB = LoadDataBase()
 
-def GetCorrelation(user, author, maxContest):
+# Compute the correlation between user and author 
+# based on contests (-inf, maxContestId)
+
+def GetCorrelation(user, author, maxContestId):
     userContests = {}
     for cntst in DB.getUserContestsInfo(user):
         userContests[cntst.contestId] = cntst
@@ -28,15 +29,17 @@ def GetCorrelation(user, author, maxContest):
         if contest.contestId not in userContests:
             continue
         
-        if contest.contestId >= maxContest:
+        if contest.contestId >= maxContestId:
             continue
 
         commonContests += 1
         scalarSum += contest.delta() * userContests[contest.contestId].delta()
-
+    
     if commonContests == 0:
         return 0
     return scalarSum * (commonContests ** (1. / 2))
+
+# Prepare data in form to create a data frame from it
 
 def PrepareUserData(minContestId, maxContestId):
     activeUsers = DB.getActiveUsers()
@@ -85,18 +88,25 @@ def PrepareUserData(minContestId, maxContestId):
     
     return data
 
-def SaveUserData():
+def SaveUserDatabase():
     data = PrepareUserData(0, 1500)
     with open('user-data.pickle', 'wb') as outfile:
         pickle.dump(data, outfile)
 
-def ReadUserData():
-    DB = None
+def ReadUserDatabase():
+    dataframeDB = None
     with open('user-data.pickle', 'rb') as outfile:
-        DB = pickle.load(outfile)
-    return DB
+        dataframeDB = pickle.load(outfile)
+    return dataframeDB
 
-def saveErrors(xs, ys, name, save = False):
+# Based on predictions (xs) and actual rating change (ys),
+# treat these as points, and draw on plane
+# Adds linear regression and line f(x) = x
+# to ease results verification
+# If save = True, then saves the result in
+# drawings/name.png
+
+def SaveErrors(xs, ys, name, save = False):
     xs = np.array(xs)
     ys = np.array(ys)
 
@@ -112,63 +122,18 @@ def saveErrors(xs, ys, name, save = False):
     plt.xlabel('Expected change by Predictor')
     plt.ylabel('True change')
 
-
-
     if save == True:
         plt.savefig('drawings/%s.png' % name)
     else:
         plt.show()
 
-def TestGlobalModel():
-    DF = pd.DataFrame(ReadUserData())
-    train_DF = DF[DF["contest id"] <= 1450]
-    train_DF = train_DF[:400]
-    test_DF = DF[DF["contest id"] > 1450]
-    forestModel = Forest(train_DF, 20, 3, "numerical", verbose = 1)
+# For user 'user' compute the predictions
+# for any contest with id > 1200, such that
+# user had written at least 20 contests
+# before the chosen one
 
-    xs, ys = [], []
-    for s in range(test_DF.shape[0]):
-        if test_DF.iat[s, 4] < 2800:
-            continue
-
-        val = int(forestModel.Query(test_DF.iloc[s]))
-        exp_val = test_DF.iat[s, 3]
-
-        xs.append(val)
-        ys.append(exp_val)
-
-    saveErrors(xs, ys, "TestGlobalModel")
-
-def TestSingleUser(user):
-    DF = pd.DataFrame(ReadUserData())
-    DF = DF[DF["user"] == user]
-
-    trainDF = DF[DF["contest id"] <= 1450]
-    testDF = DF[DF["contest id"] > 1450]
-
-    xs, ys = [], []
-    curTrainDF = trainDF[trainDF["user"] == user]
-    forestModel = Forest(curTrainDF, 20, 3, "numerical", verbose = 1)
-    
-    for s in range(testDF.shape[0]):
-        curRow = testDF.iloc[s]
-        xs.append(forestModel.Query(curRow))
-        ys.append(curRow["target"])
-    return xs, ys
-
-def MultipleUsersTest():
-    username = None
-    try:
-        while True:
-            username = input()
-            xs, ys = TestSingleUser(username)
-            saveErrors(xs, ys, 'user-%s' % username, False)
-
-    except EOFError:
-        exit(0)
-
-def TestUser(user):
-    DF = pd.DataFrame(ReadUserData())
+def TestUser(user, verbose = True):
+    DF = pd.DataFrame(ReadUserDatabase())
     DF = DF[DF["user"] == user]
 
     contestList = DB.getUserContests(user)
@@ -177,6 +142,7 @@ def TestUser(user):
     
     xs, ys = [], []
     n = len(contestList)
+
     for i in range(n - 20):
         s = i + 20
         if DF.iloc[s]["contest id"] < 1200:
@@ -184,12 +150,13 @@ def TestUser(user):
 
         trainDF = DF[i:s]
         forestModel = Forest(trainDF, 20, 3, "numerical")
+        
+        if verbose:
+            print('done %d, left %d' % (i, n - 20 - i - 1))
 
-        print('done %d, left %d' % (i, n - 20 - i - 1))
         xs.append(forestModel.Query(DF.iloc[s]))
         ys.append(DF.iloc[s]["target"])
-    saveErrors(xs, ys, 'test-user-%s' % user, True)
+
+    SaveErrors(xs, ys, 'test-user-%s' % user, True)
 
 TestUser(input())
-#TestGlobalModel()
-#MultipleUsersTest()
