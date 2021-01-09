@@ -14,6 +14,7 @@ from database import UsersContestsDBClass
 from database import LoadDataBase
 
 from RandomForest import Forest
+from sklearn.ensemble import RandomForestRegressor, AdaBoostRegressor
 import matplotlib.pyplot as plt
 
 DB = LoadDataBase()
@@ -164,5 +165,53 @@ def TestUser(user, verbose = True):
 
     SaveErrors(xs, ys, 'test-user-%s' % user, True)
 
+# For user 'user' compute the predictions
+# for any contest with id > 1200, such that
+# user had written at least 20 contests
+# before the chosen one. Use sklearn, probably
+# TestUser or TestUserSklearn will be removed in
+# the future.
+
+def TestUserSklearn(user, ModelType, verbose = True, save = True, **kwargs):
+    DF = pd.DataFrame(ReadUserDatabase())
+    DF = DF[DF["user"] == user].drop(["user", "country"], axis=1)
+
+    contestList = DB.getUserContests(user)
+    assert len(contestList) > 20
+
+    xs, ys = [], []
+    n = len(contestList)
+
+    for i in range(n - 20):
+        s = i + 20
+        if DF.iloc[s]['contest id'] < 1200:
+            if verbose:
+                print('Skipping contest of id %d' % DF.iloc[s]['contest id'])
+            continue
+
+        train_df = DF[i:s]
+        X, y = train_df.drop('target', axis=1), train_df['target']
+        model = ModelType(**kwargs).fit(X, y)
+        pred = model.predict([DF.iloc[s].drop('target')])[0]
+        
+        if verbose:
+            print('done %d, left %d' % (i, n - 20 - i - 1))
+        
+        xs.append(pred)
+        ys.append(DF.iloc[s]['target'])
+    
+    xs = np.array(xs)
+    ys = np.array(ys)
+
+    SaveErrors(xs, ys, 'test-user-%s' % user, save)
+
+
 if __name__ == '__main__':
-    TestUser(input())
+    #  TestUser(input())
+    TestUserSklearn(input(),
+        RandomForestRegressor,
+        n_estimators=20,
+        max_features=3)
+    #  TestUserSklearn(input(),
+        #  AdaBoostRegressor,
+        #  n_estimators=20)
