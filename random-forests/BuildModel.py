@@ -164,4 +164,5 @@ def TestUser(user, verbose = True):
 
     SaveErrors(xs, ys, 'test-user-%s' % user, True)
 
-TestUser(input())
+if __name__ == '__main__':
+    TestUser(input())
