@@ -236,9 +236,12 @@ BlockAPICalls.lasttime = time.time()
 BlockAPICalls.now = BlockAPICalls.lasttime
 
 
-def ActiveUserFetch():
+def UserDataFetch(active=False):
     res = {}
-    users = GetActiveUsers()
+    if(active):
+        users = GetActiveUsers()
+    else:
+        users = GetAllUsers()
     leftusers = len(users)
 
     for user in users:
@@ -348,7 +351,7 @@ def LoadDataBase(clean=True):
 
 
 if __name__ == '__main__':
-    ActiveUserFetch()
+    UserDataFetch()
     AllUserFetch()
     ContestFetch()
     CreateDataBase()
