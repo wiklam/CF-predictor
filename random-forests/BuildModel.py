@@ -76,7 +76,6 @@ def PrepareUserData(minContestId, maxContestId):
 
             push("target", contest.delta())
             push("rating", contest.oldRating)
-            push("rank", contest.rank)
 
             contestInfo = DB.contests[contest.contestId]
             push("start time", contestInfo.startTime % (24 * 60 * 60))
