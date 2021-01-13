@@ -66,9 +66,7 @@ class CategoricalMultivalueSplit(AbstractSplit):
             child.addToGraphviz(dot, printInfo)
             dot.edge(f"{id(parent)}", f"{id(child)}", label=f"{splitName}")
 
-def GetCategoricalSplit(
-    df, parentPurity, purityFun, attr, normalizeBySplitEntropy=False
-):
+def GetCategoricalSplit(df, parentPurity, purityFun, attr, normalizeBySplitEntropy=False):
     split = CategoricalMultivalueSplit(attr)
 
     meanChildPurity = 0
@@ -111,9 +109,7 @@ class NumericalSplit(AbstractSplit):
         dot.edge(f"{id(parent)}", f"{id(self.subtrees[1])}", label=f"> {self.th:.2f}")
 
 
-def GetNumericalSplit(
-    df, parentPurity, purityFun, attr, normalizeBySplitEntropy=False
-):
+def GetNumericalSplit( df, parentPurity, purityFun, attr, normalizeBySplitEntropy=False):
     attrDF = df[[attr, "target"]].sort_values(attr)
     targets = attrDF["target"]
     values = attrDF[attr]
@@ -136,7 +132,9 @@ def GetNumericalSplit(
         if attributeValue == nextAttributeValue:
             continue
 
-        meanChildPurity = ((rowI + 1) * purityFun(leftCounts.copy()) + (N - rowI - 1) * purityFun(rightCounts.copy())) / N
+        leftCountschildPurity = ((rowI + 1) * purityFun(leftCounts.copy())
+        rightcountschildPurity (N - rowI - 1) * purityFun(rightCounts.copy()))
+        meanChildPurity = (leftcountschildPurity + rightcountschildPurity) / N
         purityGain = parentPurity - meanChildPurity
 
         if normalizeBySplitEntropy:
