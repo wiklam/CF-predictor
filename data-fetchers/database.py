@@ -247,11 +247,10 @@ def UserDataFetch(seg=0):
     res = {}
     with open('user-info.pickle', 'rb') as outfile:
         users = pickle.load(outfile)
-    userNumber = len(users)
+    usersNumber = len(users)
     users = list(users.items())
-    start = int(userNumber * ((seg - 1) / MAX_SEGMENT))
-    end = int(userNumber * ((seg) / MAX_SEGMENT))
-    
+    start = int(usersNumber * ((seg - 1) / MAX_SEGMENT))
+    end = int(usersNumber * ((seg) / MAX_SEGMENT))
     for it in range(start, end):
         userName = users[it][0]
         userCntst = GetUserContestHistory(userName)
@@ -364,9 +363,9 @@ if __name__ == '__main__':
         ContestFetch()
         CreateDataBase()
     elif(len(sys.argv) == 2):
-        if(int(sys.argv[1]) >= 0 and int(sys.argv[1]) <= MAX_SEGMENT + 1):
+        if(int(sys.argv[1]) >= 0 and int(sys.argv[1]) <= MAX_SEGMENT):
             UserDataFetch(seg=int(sys.argv[1]))
         else:
-            print("Argument should be an int from range [0," + str(MAX_SEGMENT + 1) + ']')
+            print("Argument should be an int from range [0," + str(MAX_SEGMENT) + ']')
     else:
         print("Unknown arguments")
