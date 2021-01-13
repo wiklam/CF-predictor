@@ -3,6 +3,8 @@ import json
 import pickle
 import time
 import re
+import sys
+import datetime
 from bs4 import BeautifulSoup as bs
 
 ## This script allows you to create a database of all users,
@@ -43,6 +45,7 @@ from bs4 import BeautifulSoup as bs
 MAX_API_REQUESTS = 5
 API_REQUESTS_INTERVAL = 1
 MIN_CONTESTS = 5
+MAX_SEGMENT = 18
 
 
 class UserContestRatingClass:
@@ -236,33 +239,37 @@ BlockAPICalls.lasttime = time.time()
 BlockAPICalls.now = BlockAPICalls.lasttime
 
 
-def UserDataFetch(active=False):
+def UserDataFetch(seg=0):
+    if seg == 0:
+        AllUserFetch()
+        return
+    
     res = {}
-    if(active):
-        users = GetActiveUsers()
-    else:
-        users = GetAllUsers()
-    leftusers = len(users)
+    with open('user-info.pickle', 'rb') as outfile:
+        users = pickle.load(outfile)
+    userNumber = len(users)
+    users = list(users.items())
+    start = int(userNumber * ((seg - 1) / MAX_SEGMENT))
+    end = int(userNumber * ((seg) / MAX_SEGMENT))
+    
+    for it in range(start, end):
+        userName = users[it][0]
+        userCntst = GetUserContestHistory(userName)
+        timeleft = str(datetime.timedelta(hours=((end-it)/(5 * 60 * 60)))).rsplit(':', 1)[0]
+        print("Users left " + str(end-it) + " " + userName + "Estimated time " + timeleft)
 
-    for user in users:
-        leftusers -= 1
-        userName = user['handle']
-        usercntst = GetUserContestHistory(userName)
-        print("Users left " + str(leftusers) + " " + userName)
-
-        if usercntst == None:
+        if userCntst == None:
             print("PROBLEM WITH " + userName)
             with open('error-users.json', 'a') as outfile:
                 json.dump(userName, outfile)
             continue
-
-        elif len(usercntst) < MIN_CONTESTS:
+        elif len(userCntst) < MIN_CONTESTS:
             continue
 
-        usercntst = ContestRatingInfo(usercntst)
-        res[userName] = usercntst
+        userCntst = ContestRatingInfo(userCntst)
+        res[userName] = userCntst
         
-    with open('user-contest-history-info.pickle', 'wb') as outfile:
+    with open('user-contest-history-info' + str(seg) + '.pickle', 'wb') as outfile:
         pickle.dump(res, outfile)
 
 
@@ -295,13 +302,15 @@ def ContestFetch():
 
 
 def CreateDataBase():
-    users = contests = contestHistory = None
+    users = contests = None
+    contestHistory = {}
     with open('user-info.pickle', 'rb') as outfile:
         users = pickle.load(outfile)
     with open('contest-info.pickle', 'rb') as outfile:
         contests = pickle.load(outfile)
-    with open('user-contest-history-info.pickle', 'rb') as outfile:
-        contestHistory = pickle.load(outfile)
+    for it in range(MAX_SEGMENT):
+        with open('user-contest-history-info' + str(it+1) + '.pickle', 'rb') as outfile:
+            contestHistory.update(pickle.load(outfile))
     DB = UsersContestsDBClass(users, contests, contestHistory)
     with open('database.pickle', 'wb') as outfile:
         pickle.dump(DB, outfile)
@@ -351,7 +360,13 @@ def LoadDataBase(clean=True):
 
 
 if __name__ == '__main__':
-    UserDataFetch()
-    AllUserFetch()
-    ContestFetch()
-    CreateDataBase()
+    if(len(sys.argv) == 1):
+        ContestFetch()
+        CreateDataBase()
+    elif(len(sys.argv) == 2):
+        if(int(sys.argv[1]) >= 0 and int(sys.argv[1]) <= MAX_SEGMENT + 1):
+            UserDataFetch(seg=int(sys.argv[1]))
+        else:
+            print("Argument should be an int from range [0," + str(MAX_SEGMENT + 1) + ']')
+    else:
+        print("Unknown arguments")
