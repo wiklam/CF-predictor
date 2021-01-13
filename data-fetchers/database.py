@@ -3,17 +3,20 @@ import json
 import pickle
 import time
 import re
+import pandas as pd
+import numpy as np
 import sys
 import datetime
 from bs4 import BeautifulSoup as bs
 
 ## This script allows you to create a database of all users,
-## contests and active users' contest history. 
+## contests and active users' contest history.
 
-## All users are stored as a dictionary with username as a key
-## and UserInfoClass as a value.
-## UserInfoClass fields:
-##      - nick
+## Data is stored in DataFrames, if value is missing it is
+## NaN or None, depending on its type (NaN for numerical, None otherwise)
+
+## All users are stored as a DataFrame with username as an index.
+## User DataFrame fields:
 ##      - country (possibly None)
 ##      - city (possibly None)
 ##      - organization (possibly None)
@@ -21,26 +24,30 @@ from bs4 import BeautifulSoup as bs
 ##      - rating
 ##      - maxRating
 
-## Contests are stored as a dictionary with contestId as a key
-## and ContestInfoClass as a value.
-## ContestInfoClass fields:
+## Contests are stored as a DataFrame with contestId as an index.
+## Contests DataFrame fields:
 ##      - duration (in seconds)
 ##      - startTime (in seconds)
+##      - dayTime (in seconds from midnight)
 ##      - authors (list of usernames, possibly None)
 ## We consider only CodeForces (type CF) contests (not IOI or ICPC).
 
 ## Contest histories are stored as a dictionary with username as a key
-## and UserContestRatingClass as a value:
-## UserContestRatingClass fields:
+## and user contest history DataFrame as a value:
+## Contest history DataFrame fields:
 ##      - contestId
 ##      - rank (user ranking place in that contest)
 ##      - oldRating
 ##      - newRating
+##      - delta (newRating - oldRating)
 ## We store contest history only for active users (participated in the rated
 ## contest during the last month) who participated in at least MIN_CONTESTS.
+## Contest history for every user is sorted in descending order by contestId column.
 
-## Use LoadDataBase function to get database object with users, contests and contestHistory
-## dictionaries described above.
+## Use LoadDataBase function to get database object with
+## users, contests and contestHistory described above.
+## LoadDataBase has clean=True parameter, which cleans database from
+## strange data, inconsistencies.
 
 MAX_API_REQUESTS = 5
 API_REQUESTS_INTERVAL = 1
@@ -72,14 +79,15 @@ class ContestInfoClass:
         if "startTimeSeconds" in contest:
             self.startTime = contest["startTimeSeconds"]
         else:
-            self.startTime = None
+            self.startTime = np.nan
         if "preparedBy" in contest:
             self.authors = [contest["preparedBy"]]
         else:
             self.authors = FindAuthors(contest["id"])
 
     def __str__(self):
-        res = 'duration: %dh %02dm' % (self.duration // 3600, self.duration % 3600 // 60)
+        res = 'duration: %dh %02dm' % (
+                self.duration // 3600, self.duration % 3600 // 60)
         if self.startTime:
             res += ', startTime: %ds' % (self.startTime,)
         if self.authors:
@@ -119,9 +127,41 @@ class UserInfoClass:
 
 class UsersContestsDBClass:
     def __init__(self, users, contests, contestHistory):
-        self.users = users
-        self.contests = contests
-        self.contestHistory = contestHistory
+        self.users = pd.DataFrame([
+            self.userToDict(user) for user in users.values()],
+            index=users.keys()).replace("", None)
+
+        self.contests = pd.DataFrame([
+            self.contestToDict(cntst) for cntst in contests.values()],
+            index=contests.keys()).replace("", None)
+
+        self.contestHistory = {}
+        for user, history in contestHistory.items():
+            self.contestHistory[user] = pd.DataFrame(
+                self.contestHistoryToDict(cntstHist) for cntstHist in history) \
+                .sort_values("contestId") \
+                .replace("", None)
+
+    def userToDict(self, user):
+        return {"country": user.country,
+                "city": user.city,
+                "organization": user.organization,
+                "contribution": user.contribution,
+                "rating": user.rating,
+                "maxRating": user.maxRating}
+
+    def contestToDict(self, cntst):
+        return {"duration": cntst.duration,
+                "startTime": cntst.startTime,
+                "dayTime": cntst.startTime % (60 * 60 * 24),
+                "authors": cntst.authors}
+
+    def contestHistoryToDict(self, cntstHist):
+        return {"contestId": cntstHist.contestId,
+                "rank": cntstHist.rank,
+                "oldRating": cntstHist.oldRating,
+                "newRating": cntstHist.newRating,
+                "delta": cntstHist.delta()}
 
     def getAllUsers(self):
         return self.users.keys()
@@ -318,33 +358,30 @@ def CreateDataBase():
 def CleanDataBase(DB):
     # add MikeMirzayanov
     admin = "MikeMirzayanov"
-    DB.users[admin] = UserInfoClass({
-        "handle": admin,
+    DB.users.loc[admin] = {
         "country": "Russia",
         "city": "Saratov",
+        "organization": None,
         "contribution": 256,
         "rating": 0,
         "maxRating": 0
-    })
+    }
 
     # remove authors not in our database
-    for contest in DB.contests.values():
-        if contest.authors:
-            contest.authors = [author for author in contest.authors if author in DB.users]
+    for authors in DB.contests["authors"]:
+        to_pop = [author for author in authors if not author in DB.users.index]
+        for tp in to_pop:
+            authors.remove(tp)
 
     # remove contests with no authors
-    DB.contests = {cId: contest for cId, contest in DB.contests.items() if contest.authors}
+    DB.contests = DB.contests[DB.contests["authors"].map(lambda x: len(x) > 0)]
 
     # authors as set
-    for contest in DB.contests.values():
-        contest.authors = set(contest.authors)
-
-    # remove contests with no startTime
-    DB.contests = {cId: contest for cId, contest in DB.contests.items() if contest.startTime}
+    DB.contests["authors"] = DB.contests["authors"].map(lambda x: set(x))
 
     # remove non existing contest from contestHistory
-    for user, history in DB.contestHistory.items():
-        DB.contestHistory[user] = [entry for entry in history if entry.contestId in DB.contests]
+    for user, history_df in DB.contestHistory.items():
+        DB.contestHistory[user] = history_df[history_df.contestId.map(lambda x: x in DB.contests.index)]
 
     return DB
     
