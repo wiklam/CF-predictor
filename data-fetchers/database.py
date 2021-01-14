@@ -8,6 +8,7 @@ import numpy as np
 import sys
 import datetime
 from bs4 import BeautifulSoup as bs
+from collections import defaultdict
 
 ## This script allows you to create a database of all users,
 ## contests and active users' contest history.
@@ -40,6 +41,7 @@ from bs4 import BeautifulSoup as bs
 ##      - oldRating
 ##      - newRating
 ##      - delta (newRating - oldRating)
+##      - seed
 ## We store contest history only for active users (participated in the rated
 ## contest during the last month) who participated in at least MIN_CONTESTS.
 ## Contest history for every user is sorted in descending order by contestId column.
@@ -61,6 +63,7 @@ class UserContestRatingClass:
         self.rank = contest["rank"]
         self.oldRating = contest["oldRating"]
         self.newRating = contest["newRating"]
+        self.seed = np.nan
 
     def delta(self):
         return self.newRating - self.oldRating
@@ -71,6 +74,9 @@ class UserContestRatingClass:
 
     def __repr__(self):
         return str(self)
+
+    def setSeed(self, seed):
+        self.seed = seed
 
 
 class ContestInfoClass:
@@ -161,7 +167,8 @@ class UsersContestsDBClass:
                 "rank": cntstHist.rank,
                 "oldRating": cntstHist.oldRating,
                 "newRating": cntstHist.newRating,
-                "delta": cntstHist.delta()}
+                "delta": cntstHist.delta(),
+                "seed": cntstHist.seed}
 
     def getAllUsers(self):
         return self.users.keys()
@@ -339,6 +346,36 @@ def ContestFetch():
     with open('contest-info.pickle', 'wb') as outfile:
         pickle.dump(res, outfile)
 
+def CFProbFormula(userRating, otherRating):
+    return 1 / (1 + (10**((userRating-otherRating)/400)))
+
+def CountSingleContestSeed(userRating, ratingCounter):
+    seed = 1
+    for rating, counter in ratingCounter.items():
+        if rating == userRating and counter != 1:
+            assert counter != 0
+            seed = seed + (counter-1) * CFProbFormula(userRating, rating)
+        if counter != 0:
+            seed = seed + counter * CFProbFormula(userRating, rating)
+    return seed
+
+def GetContestsUserRatingCounter(contestHistory):
+    ratingCounter = defaultdict(lambda: defaultdict(lambda: 0))
+    for user, history in contestHistory.items():
+        for contest in history:
+            contestId = contest.contestId
+            userRating = contest.oldRating
+            ratingCounter[contestId][userRating] = ratingCounter[contestId][userRating] + 1
+    return ratingCounter
+
+def CalcCFSeeds(contestHistory):
+    ratingCounter = GetContestsUserRatingCounter(contestHistory)
+    for user, history in contestHistory.items():
+        for contest in history:
+            userOldRating = contest.oldRating
+            contestId = contest.contestId
+            seed = CountSingleContestSeed(userOldRating, ratingCounter[contestId])
+            contest.setSeed(seed)
 
 def CreateDataBase():
     users = contests = None
@@ -350,6 +387,7 @@ def CreateDataBase():
     for it in range(MAX_SEGMENT):
         with open('user-contest-history-info' + str(it+1) + '.pickle', 'rb') as outfile:
             contestHistory.update(pickle.load(outfile))
+    CalcCFSeeds(contestHistory)
     DB = UsersContestsDBClass(users, contests, contestHistory)
     with open('database.pickle', 'wb') as outfile:
         pickle.dump(DB, outfile)
