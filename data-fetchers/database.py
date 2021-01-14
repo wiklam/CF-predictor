@@ -1,4 +1,5 @@
 import re
+import bz2
 import json
 import time
 import pickle
@@ -192,7 +193,7 @@ def FetchAllStandings(contestIds=None):
             all_standings[contestId] = standings
     print("Fetched all standings")
     
-    with open("standings.pickle", "wb") as outfile:
+    with bz2.BZ2File("standings.pickle.bz2", "w") as outfile:
         pickle.dump(all_standings, outfile)
         
     
@@ -225,7 +226,7 @@ def LoadDataBase(clean=True):
         contests = pickle.load(infile)
     with open("history.pickle", "rb") as infile:
         history = pickle.load(infile)
-    with open("standings.pickle", "rb") as infile:
+    with bz2.BZ2File("standings.pickle.bz2", "r") as infile:
         standings = pickle.load(infile)
     return Database(users, contests, history, standings, clean=clean)
 
