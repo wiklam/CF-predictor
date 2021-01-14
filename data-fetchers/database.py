@@ -217,7 +217,7 @@ class Database:
         pass
     
     
-def LoadDataBase(clean=True):
+def LoadDatabase(clean=True):
     users = contests = None
     history = standings = None
     with open("users.pickle", "rb") as infile:
