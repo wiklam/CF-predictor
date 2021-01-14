@@ -347,16 +347,16 @@ def ContestFetch():
         pickle.dump(res, outfile)
 
 def CFProbFormula(userRating, otherRating):
-
     return 1 / (1 + (10**((userRating-otherRating)/400)))
 
 def CountSingleContestSeed(userRating, ratingCounter):
     seed = 1
     for rating, counter in ratingCounter.items():
         if rating == userRating and counter != 1:
-            seed = seed + (counter-1)*CFProbFormula(userRating, rating)
+            assert counter != 0
+            seed = seed + (counter-1) * CFProbFormula(userRating, rating)
         if counter != 0:
-            seed = seed + counter*CFProbFormula(userRating, rating)
+            seed = seed + counter * CFProbFormula(userRating, rating)
     return seed
 
 def GetContestsUserRatingCounter(contestHistory):
@@ -372,9 +372,9 @@ def CalcCFSeeds(contestHistory):
     ratingCounter = GetContestsUserRatingCounter(contestHistory)
     for user, history in contestHistory.items():
         for contest in history:
-            userRating = contest.oldRating
+            userOldRating = contest.oldRating
             contestId = contest.contestId
-            seed = CountSingleContestSeed(userRating, ratingCounter[contestId])
+            seed = CountSingleContestSeed(userOldRating, ratingCounter[contestId])
             contest.setSeed(seed)
 
 def CreateDataBase():
