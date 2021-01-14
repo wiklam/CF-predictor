@@ -51,8 +51,8 @@ from bs4 import BeautifulSoup as bs
 
 MAX_API_REQUESTS = 5
 API_REQUESTS_INTERVAL = 1
-MIN_CONTESTS = 5
-MAX_SEGMENT = 18
+MIN_CONTESTS = 1
+MAX_SEGMENT = 16
 
 
 class UserContestRatingClass:
