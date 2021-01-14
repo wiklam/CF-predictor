@@ -197,9 +197,9 @@ def FetchAllStandings(contestIds=None):
         
     
 def FetchAll():
-    # handles = FetchUsers()
-    # contestIds = FetchContests()
-    # FetchAllContestHistory(handles)
+    handles = FetchUsers()
+    contestIds = FetchContests()
+    FetchAllContestHistory(handles)
     FetchAllStandings()
     
     
