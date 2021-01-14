@@ -201,7 +201,7 @@ def FetchAll():
     handles = FetchUsers()
     contestIds = FetchContests()
     FetchAllContestHistory(handles)
-    FetchAllStandings()
+    FetchAllStandings(contestIds)
     
     
 class Database:
