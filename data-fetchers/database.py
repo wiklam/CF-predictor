@@ -217,7 +217,6 @@ class Database:
         # be careful - ordering is important
         self.removeAbsentAuthors()
         self.removeAbsentUsersWithHistory()
-        self.removeContestsWithEmptyAuthors() # keep or not ?
         self.removeUsersWithAbsentContestsInHistory()
         self.makeContestsAndStandingsMatch()
         assert self.allAuthorsArePresent() == True
@@ -227,10 +226,7 @@ class Database:
         assert self.contestsAndStandingsAreMatched() == True
         
     def removeAbsentAuthors(self):
-        self.contests.authors = self.contests.authors.map(lambda x: set(a for a in x if a in self.users.index))            
-    
-    def removeContestsWithEmptyAuthors(self):
-        self.contests = self.contests[self.contests.authors.map(lambda x: len(x) > 0)]
+        self.contests.authors = self.contests.authors.map(lambda x: set(a for a in x if a in self.users.index))
 
     def removeAbsentUsersWithHistory(self):
         self.history = {handle: v for handle, v in self.history.items() if handle in self.users.index}
