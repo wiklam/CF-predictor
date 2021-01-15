@@ -221,7 +221,6 @@ class Database:
         self.makeContestsAndStandingsMatch()
         assert self.allAuthorsArePresent() == True
         assert self.allUsersWithHistoryArePresent() == True
-        assert self.noContestsWithEmptyAuthors() == True
         assert self.allContestsInHistoryArePresent() == True
         assert self.contestsAndStandingsAreMatched() == True
         
@@ -245,10 +244,7 @@ class Database:
     
     def allUsersWithHistoryArePresent(self):
         return all(handle in self.users.index for handle in self.history)
-            
-    def noContestsWithEmptyAuthors(self):
-        return all(self.contests.authors.map(lambda x: len(x) > 0)) 
-    
+
     def allContestsInHistoryArePresent(self):
         return all(all(contestId in self.contests.index for contestId in hist.contestId) for hist in self.history.values())
     
