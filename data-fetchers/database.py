@@ -214,8 +214,51 @@ class Database:
             self.clean()
     
     def clean(self):
-        pass
+        # be careful - ordering is important
+        self.removeAbsentAuthors()
+        self.removeAbsentUsersWithHistory()
+        self.removeContestsWithEmptyAuthors() # keep or not ?
+        self.removeUsersWithAbsentContestsInHistory()
+        self.makeContestsAndStandingsMatch()
+        assert self.allAuthorsPresent() == True
+        assert self.allUsersWithHistoryPresent() == True
+        assert self.noContestsWithEmptyAuthors() == True
+        assert self.allContestsInHistoryArePresent() == True
+        assert self.contestsAndStandingsAreMatched() == True
+        
+    def removeAbsentAuthors(self):
+        self.contests.authors = self.contests.authors.map(lambda x: set(a for a in x if a in self.users.index))            
     
+    def allAuthorsPresent(self):
+        return all(author in self.users.index for authors in self.contests.authors for author in authors)
+    
+    def removeAbsentUsersWithHistory(self):
+        self.history = {handle: v for handle, v in self.history.items() if handle in self.users.index}
+    
+    def allUsersWithHistoryPresent(self):
+        return all(handle in self.users.index for handle in self.history)
+    
+    def removeContestsWithEmptyAuthors(self):
+        self.contests = self.contests[self.contests.authors.map(lambda x: len(x) > 0)]
+            
+    def noContestsWithEmptyAuthors(self):
+        return all(self.contests.authors.map(lambda x: len(x) > 0)) 
+    
+    def removeUsersWithAbsentContestsInHistory(self):
+        self.history = {handle: hist for handle, hist in self.history.items()
+                        if all(contestId in self.contests.index for contestId in hist.contestId)}
+    
+    def allContestsInHistoryArePresent(self):
+        return all(all(contestId in self.contests.index for contestId in hist.contestId) for hist in self.history.values())
+    
+    def makeContestsAndStandingsMatch(self):
+        commonContests = set(self.contests.index) & set(self.standings.keys())
+        self.standings = {cId: v for cId, v in self.standings.items() if cId in commonContests}
+        self.contests = self.contests.loc[reversed(list(commonContests))]
+    
+    def contestsAndStandingsAreMatched(self):
+        return all(contestId in self.standings.keys() for contestId in self.contests.index)
+            
     
 def LoadDatabase(clean=True):
     users = contests = None
