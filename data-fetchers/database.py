@@ -217,12 +217,12 @@ class Database:
         # be careful - ordering is important
         self.removeAbsentAuthors()
         self.removeAbsentUsersWithHistory()
-        self.removeUsersWithAbsentContestsInHistory()
         self.makeContestsAndStandingsMatch()
+        self.removeUsersWithAbsentContestsInHistory()
         assert self.allAuthorsArePresent() == True
         assert self.allUsersWithHistoryArePresent() == True
-        assert self.allContestsInHistoryArePresent() == True
         assert self.contestsAndStandingsAreMatched() == True
+        assert self.allContestsInHistoryArePresent() == True
         
     def removeAbsentAuthors(self):
         self.contests.authors = self.contests.authors.map(lambda x: set(a for a in x if a in self.users.index))
