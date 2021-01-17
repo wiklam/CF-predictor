@@ -173,6 +173,7 @@ def FetchStandings(contestId):
         return None
     columns = ["handle", "rank", "oldRating", "newRating"]
     standings_df = pd.DataFrame(standings)[columns].set_index("handle")
+    standings_df = standings_df[~standings_df.index.duplicated()]
     standings_df["delta"] = standings_df.newRating - standings_df.oldRating
     return standings_df
 
