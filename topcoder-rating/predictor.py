@@ -5,27 +5,8 @@ import math
 
 DB = LoadDatabase()
 
-def TopcoderRatingSystem(parameters, data, errFun, verbose = True):
-    if "startRating" not in parameters:
-        parameters["startRating"] = 0
-    
-    if "startVolatility" not in parameters:
-        parameters["startVolatility"] = 1
-    
-    if "capConstant1" not in parameters:
-        parameters["capConstant1"] = 150
-
-    if "capConstant2" not in parameters:
-        parameters["capConstant2"] = 1500
-    
-    if "weightConstant1" not in parameters:
-        parameters["weightConstant1"] = 0.42
-    
-    if "weightConstant2" not in parameters:
-        parameters["weightConstant2"] = 0.18
-    
-    if "weightDecrease" not in parameters:
-        parameters["weightDecrease"] = [[2000, 0.9], [2500, 0.8]]
+def TopcoderRatingSystem(data, errFun, startRating = 0, startVolatility = 1, capConstant1 = 150, capConstant2 = 1500, weightConstant1 = 0.42, weightConstant2 = 0.18,
+    weightDecrease = [[2000, 0.9], [2500, 0.8]], verbose = True, **kwargs):
     
     contestsIds = list(data.contests.index)
     contestsIds.reverse()
@@ -42,31 +23,33 @@ def TopcoderRatingSystem(parameters, data, errFun, verbose = True):
     
     def getRating(user):
         if user not in ratings:
-            ratings[user] = parameters["startRating"]
+            ratings[user] = startRating;
         return ratings[user]
     
     def getVolatility(user):
         if user not in volatility:
-            volatility[user] = parameters["startVolatility"]
+            volatility[user] = startVolatility
         return volatility[user]
     
     def getWeight(user):
-        weight = parameters["weightConstant1"] / (getMatches(user) + 1)
-        weight += parameters["weightConstant2"]
+        weight = weightConstant1 / (getMatches(user) + 1)
+        weight += weightConstant2
         weight = 1 / (1 - weight) - 1
         
         coef = 1.
         rating = getRating(user)
-        for s in parameters["weightDecrease"]:
+        for s in weightDecrease:
             if s[0] <= rating and s[1] < coef:
                 coef = s[1]
         return coef * weight
     
     def getCap(user):
-        return parameters["capConstant1"] + parameters["capConstant2"] / (getMatches(user) + 2)
+        return capConstant1 + capConstant2 / (getMatches(user) + 2)
     
     ans = []
     for contest in contestsIds:
+        if contest > 100:
+            break
         df = data.standings[contest]
         n = df.shape[0]
 
@@ -131,4 +114,4 @@ def errFun(fa, fb):
     return ans / n
 
 print("DB read")
-print(TopcoderRatingSystem({}, DB, errFun))
+print(TopcoderRatingSystem(DB, errFun))
