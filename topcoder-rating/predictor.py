@@ -5,7 +5,7 @@ import math
 
 DB = LoadDatabase()
 
-def TopcoderRatingSystem(data, errFun, startRating = 0, startVolatility = 1, capConstant1 = 150, capConstant2 = 1500, weightConstant1 = 0.42, weightConstant2 = 0.18,
+def TopcoderRatingSystem(data, errFun, startRating = 1000, startVolatility = 100, capConstant1 = 150, capConstant2 = 1500, weightConstant1 = 0.42, weightConstant2 = 0.18,
     weightDecrease = [[2000, 0.9], [2500, 0.8]], verbose = True, **kwargs):
     
     contestsIds = list(data.contests.index)
@@ -48,19 +48,16 @@ def TopcoderRatingSystem(data, errFun, startRating = 0, startVolatility = 1, cap
     
     ans = []
     for contest in contestsIds:
-        if contest > 100:
-            break
         df = data.standings[contest]
         n = df.shape[0]
-
         user = list(df.index)
-        rank, oldRating, oldVolatility = [[None] * n] * 3
-        
+        rank, oldRating, oldVolatility = [], [], []
+
         for i in range(n):
-            rank[i] = df.iloc[i]["rank"]
-            oldRating[i] = getRating(user[i])
-            oldVolatility[i] = getVolatility(user[i])
-        
+            rank.append(df.iloc[i]["rank"])
+            oldRating.append(getRating(user[i]))
+            oldVolatility.append(getVolatility(user[i]))
+
         avgRating = 0
         for i in range(n):
             avgRating += oldRating[i]
@@ -110,7 +107,7 @@ def errFun(fa, fb):
     ans = 0
 
     for i in range(n):
-        ans += math.sqrt(abs(fa[i] - fb[i]))
+        ans += abs(fa[i] - fb[i])
     return ans / n
 
 print("DB read")
