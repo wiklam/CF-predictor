@@ -61,7 +61,7 @@ def AtCoderRatingSystem(data, consider=50, verbose=False, **kwargs):
 
             res = 0
             mult = 1
-            for perf in self.perfs:
+            for perf in reversed(self.perfs):
                 rperf = self.getRPerf(perf)
                 mult *= 0.9
                 res += g(rperf) * mult
