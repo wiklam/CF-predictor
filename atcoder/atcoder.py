@@ -8,7 +8,7 @@ import numpy as np
 #   - add standarized value to return - proposal dict contestId: error
 
 # return value: ans, userRatings
-#   ans - dict of contestId: average error on expected ranking
+#   ans - dict of contestId: average error of expected ranking
 #   userRatings: dict of handle: inner rating class with AtCoder specific measures
 # parameters:
 #   - consider: eg. consider=50, will consider only 50 first contests (-1 means consider all)
