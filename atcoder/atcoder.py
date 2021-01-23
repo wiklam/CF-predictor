@@ -36,7 +36,9 @@ def AtCoderRatingSystem(data, consider=50, verbose=False, **kwargs):
     class Rating:
         def __init__(self):
             self.perfs = []
+            # sum(0.9**i * perf_i)
             self.num = 0
+            # sum(0.9**i)
             self.den = 0
             self.aperf = 0
             self.ratings = []
@@ -53,7 +55,7 @@ def AtCoderRatingSystem(data, consider=50, verbose=False, **kwargs):
             self.den = 0.9 * (1 + self.den)
             self.aperf = self.num / self.den
         
-        def getRating(self):proposition
+        def getRating(self):
             if len(self.perfs) == 0:
                 return 0
 
