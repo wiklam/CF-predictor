@@ -1,20 +1,5 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[3]:
-
 from database import Database, LoadDatabase
 import numpy as np
-
-
-# In[4]:
-
-
-DB = LoadDatabase()
-
-
-# In[246]:
-
 
 class CFRatingPredictor:
     def __init__(self, db):
@@ -39,14 +24,9 @@ class CFRatingPredictor:
         rank = contestant['rank']
         oldRating = contestant['oldRating']
         seed = self.getSeed(oldRating, contestant, contestStandings)
-        print(contestant.name)
-        print(seed)
         midRank = np.sqrt(rank*seed)
         R = self.binarySearch(midRank, lambda r: self.getSeed(r, contestant, contestStandings))
-        print(R)
-        print(oldRating)
         delta = self.intDiv(R-oldRating,2)
-        print(delta)
         return delta
     
     def binarySearch(self, value, f, left=1, right=8000):
@@ -63,7 +43,7 @@ class CFRatingPredictor:
     def fightAgainstInflation(self, contestStandings, deltas):
         contestantsSorted = contestStandings.sort_values(by=['oldRating'], ascending=False)
         pplCount = len(contestStandings)
-        topPplCount = (min(pplCount, 4*(np.rint(np.sqrt(pplCount)))))
+        topPplCount = (min(pplCount, 4*(np.rint(np.sqrt(pplCount))))).astype(int)
         topContestans = contestantsSorted.head(topPplCount)
         sum = np.sum([deltas[i] for i in topContestans.index])
         inc = min(0, max(-10, -(self.intDiv(sum, topPplCount))))
@@ -73,7 +53,6 @@ class CFRatingPredictor:
     def fixToSumZero(self, contestStandings, deltas):
         sum = np.sum(deltas)
         inc = -self.intDiv(sum, len(contestStandings)) - 1
-        print(inc)
         return deltas + inc
     
     def processContest(self, contestStandings):
@@ -82,61 +61,27 @@ class CFRatingPredictor:
         deltas = self.fightAgainstInflation(contestStandings, deltas)
         return deltas
     
+    def calcErrorContest(self, contestStandings, errCalc):
+        expectedRanks = contestStandings.apply(lambda c: self.getSeed(c['oldRating'] ,c, contestStandings), axis=1).to_numpy()
+        actualRanks = contestStandings['oldRating'].to_numpy()
+        vecErrCalc = np.vectorize(errCalc)
+        return np.sum(vecErrCalc(expectedRanks, actualRanks)) / len(contestStandings)
+    
+    def genErrRateDic(self, errCalc):
+        errRateDic = {}
+        for key, contestStandings in self.standings.items():
+            print("Contest ", key, " started")
+            print("There are ", len(contestStandings), " participants in this contest")
+            errRateDic[key] = self.calcErrorContest(contestStandings, errCalc)
+            print("Contest ", key, " is done!")
+        return errRateDic
 
+def GenCFRatingErrorRates(DB, errCalc):
+    rp = CFRatingPredictor(DB)
+    return rp.genErrRateDic(errCalc)
 
-# In[247]:
+def AnadiErrorRate(a, b):
+    return abs(a-b)
 
-
-rp = CFRatingPredictor(DB)
-
-
-# In[248]:
-
-
-standings = DB.standings[1299]
-deltas = rp.processContest(standings)
-
-
-# In[249]:
-
-
-count = 0
-for i in deltas.index:
-    if deltas[i] != standings.loc[i]['delta']:
-        print("nickname:     ", i)
-        print("counted delta:", deltas[i])
-        print("actual  delta:", standings.loc[i]['delta'])
-        count += 1
-print(count)
-
-
-# In[233]:
-
-
-standings.head(10)
-
-
-# In[234]:
-
-
-deltas.head(10)
-
-
-# In[235]:
-
-
-standings.loc['izban']
-
-
-# In[245]:
-
-
-standings = DB.standings[1299]
-rp.getSeed(2821, standings.loc['izban'], standings)
-
-
-# In[ ]:
-
-
-
-
+DB = LoadDatabase()
+GenCFRatingErrorRates(DB, AnadiErrorRate)
