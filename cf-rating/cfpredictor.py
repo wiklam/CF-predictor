@@ -83,5 +83,6 @@ def GenCFRatingErrorRates(DB, errCalc):
 def AnadiErrorRate(a, b):
     return abs(a-b)
 
-DB = LoadDatabase()
-GenCFRatingErrorRates(DB, AnadiErrorRate)
+if __name__ == "__main__":
+    DB = LoadDatabase()
+    GenCFRatingErrorRates(DB, AnadiErrorRate)
