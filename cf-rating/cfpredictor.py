@@ -20,6 +20,17 @@ class CFRatingPredictor:
         seed = np.sum(vecProb(oldRatings)) - self.Pij(contestant['oldRating'],rating) + 1
         return seed
     
+    def getSeedCached(self, npCS):
+        cache = {}
+        def seedCacher(rating):
+            if rating not in cache:
+                prob = lambda r: self.Pij(r, rating)
+                vecProb = np.vectorize(prob)
+                cache[rating] = np.sum(vecProb(npCS)) + 0.5
+            return cache[rating]
+        
+        return seedCacher
+    
     def getInitialRatingChange(self, contestant, contestStandings):
         rank = contestant['rank']
         oldRating = contestant['oldRating']
@@ -62,27 +73,31 @@ class CFRatingPredictor:
         return deltas
     
     def calcErrorContest(self, contestStandings, errCalc):
-        expectedRanks = contestStandings.apply(lambda c: self.getSeed(c['oldRating'] ,c, contestStandings), axis=1).to_numpy()
+        npCS = contestStandings['oldRating'].to_numpy()
+        seedCalculator = self.getSeedCached(npCS)
+        expectedRanks = contestStandings.apply(lambda c: seedCalculator(c['oldRating']), axis=1).to_numpy()
         actualRanks = contestStandings['oldRating'].to_numpy()
         vecErrCalc = np.vectorize(errCalc)
         return np.sum(vecErrCalc(expectedRanks, actualRanks)) / len(contestStandings)
     
     def genErrRateDic(self, errCalc):
         errRateDic = {}
-        for key, contestStandings in self.standings.items():
+        for key in self.contests:
+            contestStandings = self.standings[key]
             print("Contest ", key, " started")
             print("There are ", len(contestStandings), " participants in this contest")
             errRateDic[key] = self.calcErrorContest(contestStandings, errCalc)
             print("Contest ", key, " is done!")
         return errRateDic
 
-def GenCFRatingErrorRates(DB, errCalc):
+def GenCFRatingErrors(DB, errCalc):
     rp = CFRatingPredictor(DB)
     return rp.genErrRateDic(errCalc)
 
 def AnadiErrorRate(a, b):
     return abs(a-b)
 
+
 if __name__ == "__main__":
     DB = LoadDatabase()
-    GenCFRatingErrorRates(DB, AnadiErrorRate)
+    GenCFRatingErrors(DB, AnadiErrorRate)
