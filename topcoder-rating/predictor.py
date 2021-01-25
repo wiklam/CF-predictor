@@ -8,10 +8,13 @@ DB = LoadDatabase()
 def TopcoderRatingSystem(data, errFun, startRating = 1000, startVolatility = 100, capConstant1 = 150, capConstant2 = 1500, weightConstant1 = 0.42, weightConstant2 = 0.18,
     weightDecrease = [[2000, 0.9], [2500, 0.8]], verbose = True, **kwargs):
     
+    sortedStandings = [(k, v) for k, v in sorted(data.standings.items(),
+                        key = lambda x: data.contests.loc[x[0]].startTime)]
+
     contestsIds = list(data.contests.index)
-    contestsIds.reverse()
+    contestsIds = sorted(contestsIds, key = lambda x: data.contests.loc[x].startTime)
     
-    ratings, volatility, matches = {}, {}, {}
+    ans, ratings, volatility, matches = {}, {}, {}, {}
     
     def sqr(a):
         return a * a
@@ -46,7 +49,14 @@ def TopcoderRatingSystem(data, errFun, startRating = 1000, startVolatility = 100
     def getCap(user):
         return capConstant1 + capConstant2 / (getMatches(user) + 2)
     
-    ans = []
+    def getError(expRank, actRank):
+        ret = 0
+        n = len(expRank)
+
+        for s in range(n):
+            ret += errFun(expRank[s], actRank[s])
+        return ret / n
+    
     for contest in contestsIds:
         df = data.standings[contest]
         n = df.shape[0]
@@ -77,7 +87,7 @@ def TopcoderRatingSystem(data, errFun, startRating = 1000, startVolatility = 100
                 tmp = (oldRating[j] - oldRating[i]) / math.sqrt(2 * (sqr(oldVolatility[i]) + sqr(oldVolatility[j])))
                 tmp = math.erf(tmp) + 1
                 expectedRanks[i] += tmp / 2.
-        ans.append(errFun(expectedRanks, rank))
+        ans[contest] = getError(expectedRanks, rank)
         
         for i in range(n):
             ePerf = -norm.cdf((expectedRanks[i] - 0.5) / n)
@@ -102,13 +112,9 @@ def TopcoderRatingSystem(data, errFun, startRating = 1000, startVolatility = 100
             print('done contest %d' % contest)
     return ans
 
-def errFun(fa, fb):
-    n = len(fa)
-    ans = 0
-
-    for i in range(n):
-        ans += abs(fa[i] - fb[i])
-    return ans / n
+def errFun(a, b):
+    return abs(a - b)
 
 print("DB read")
-print(TopcoderRatingSystem(DB, errFun))
+tmp = TopcoderRatingSystem(DB, errFun)
+print(tmp)
