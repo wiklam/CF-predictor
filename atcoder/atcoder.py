@@ -76,250 +76,6 @@ def get_first_K_contests(K, handle_ids, ranks, standings_lens, user_contest_cnt)
     return K_handle_ids, K_ranks, K_standings_lens, K_user_contest_cnt
 
 
-@vectorize
-def powersum(q, n):
-    return q * (1 - q**n) / (1 - q)
-
-
-@vectorize
-def g(x):
-    return np.power(2, x / 800)
-
-
-@vectorize
-def ginv(y):
-    return 800 * np.log2(y)
-
-
-@vectorize
-def F(n):
-    return np.sqrt(powersum(0.81, n)) / powersum(0.9, n)
-
-
-@vectorize
-def f(n):
-    Finf = np.sqrt(0.81 / (1.0 - 0.81)) / (0.9 / (1.0 - 0.9))
-    return (F(n) - Finf) / (F(1) - Finf) * CENTER
-
-
-@njit(fastmath=True)
-def atcoder_calculate(handle_ids, ranks, standings_lens, user_contest_cnt, verbose=True):
-    user_cnt = len(user_contest_cnt)
-    standings_cnt = len(standings_lens)
-    history_cnt = len(handle_ids)
-    
-    # AtCoder stuff
-    ranks = ranks.copy().astype(np.float64)
-    nums = np.zeros(user_cnt, dtype=np.float64)
-    dens = np.zeros(user_cnt, dtype=np.float64)
-    aperfs = np.full(user_cnt, CENTER, dtype=np.float64)
-    perfs = np.empty(history_cnt, dtype=np.float64)
-    ratings = np.zeros(history_cnt, dtype=np.float64)
-    offsets = np.cumsum(user_contest_cnt) - user_contest_cnt
-    local_offsets = np.zeros(user_cnt, dtype=np.int32)
-    current_ranks = np.empty_like(ranks, dtype=np.float64)
-    
-    # parallel binsearch stuff
-    ls = np.empty(np.max(standings_lens), dtype=np.float64)
-    rs = np.empty(np.max(standings_lens), dtype=np.float64)
-    cnts = np.empty(np.max(standings_lens), dtype=np.int32)
-    handles = np.empty(np.max(standings_lens), dtype=np.int32)
-    ls_next = np.empty_like(ls)
-    rs_next = np.empty_like(rs)
-    cnts_next = np.empty_like(cnts)
-    handle_to_rank = np.empty(user_cnt, dtype=np.int32)
-    
-    standings_offset = 0
-    standings_left = len(standings_lens)
-    
-    for i in range(standings_cnt):
-        if verbose:
-            print("Standings left:", standings_left)
-        standings_left -= 1
-        standings_len = standings_lens[i]
-        
-        # fix ranks
-        j = 0
-        while j < standings_len:
-            rank = ranks[standings_offset + j]
-            k = j
-            while k + 1 < standings_len and ranks[standings_offset + k + 1] == rank:
-                k += 1
-            ranks[j:k + 1] = (2 * rank + k - j) / 2
-            j = k + 1
-            
-        # create handle -> rank mapping given current standings
-        slice_l, slice_r = standings_offset, standings_offset + standings_len
-        handle_to_rank[handle_ids[slice_l:slice_r]] = ranks[slice_l:slice_r]
-        
-        # prepare to parallel binsearch
-        ls[0], rs[0] = 0, 5000
-        cnts[0] = standings_len
-        handles[:standings_len] = handle_ids[slice_l:slice_r]
-        segs, segs_next = 1, 0
-        handles_offset = 0
-        max_iters = 80
-        
-        # do parallel binsearch
-        for j in range(max_iters):
-            updated = False
-            
-            for k in range(segs):
-                l, r = ls[k], rs[k]
-                cnt = cnts[k]
-                
-                if (r - l) <= 1e-1:
-                    ls_next[segs_next] = l
-                    rs_next[segs_next] = r
-                    cnts_next[segs_next] = cnt
-                    handles_offset += cnt
-                    segs_next += 1
-                else:
-                    updated = True
-                    m = (l + r) / 2
-                    
-                    val = 0.0
-                    for t in range(standings_len):
-                        handle_id = handle_ids[standings_offset + t]
-                        aperf = aperfs[handle_id]
-                        val += 1 / (1 + np.power(6, (m - aperf) / 400))
-                        
-                    lit, rit = handles_offset, handles_offset + cnt - 1
-                    lefts, rights = 0, 0
-                    while lit < rit:
-                        lhandle_id = handles[lit]
-                        lrank = handle_to_rank[lhandle_id]
-                        if val <= lrank - 0.5:
-                            lit += 1
-                            lefts += 1
-                            continue
-                            
-                        rhandle_id = handles[rit]
-                        rrank = handle_to_rank[rhandle_id]
-                        if val > rrank - 0.5:
-                            rit -= 1
-                            rights += 1
-                            continue
-                            
-                        lefts += 1
-                        rights += 1
-                        handles[lit], handles[rit] = handles[rit], handles[lit]
-                        lit += 1
-                        rit -= 1
-                        
-                    if lit == rit:
-                        handle_id = handles[lit]
-                        rank = handle_to_rank[handle_id]
-                        if val <= rank - 0.5:
-                            lefts += 1
-                        else:
-                            rights += 1
-                            
-                    if lefts > 0:
-                        ls_next[segs_next] = l
-                        rs_next[segs_next] = m
-                        cnts_next[segs_next] = lefts
-                        segs_next += 1
-                        
-                    if rights > 0:
-                        ls_next[segs_next] = m
-                        rs_next[segs_next] = r
-                        cnts_next[segs_next] = rights
-                        segs_next += 1
-                        
-                    handles_offset += cnt
-                    
-            if not updated:
-                break
-                
-            segs = segs_next
-            ls[:segs] = ls_next[:segs]
-            rs[:segs] = rs_next[:segs]
-            cnts[:segs] = cnts_next[:segs]
-            segs_next = 0
-            handles_offset = 0
-            
-        # calculate perfs, ratings, ... after parallel binsearch
-        handles_offset = 0
-        for j in range(segs):
-            perf_base = ls[j]
-            cnt = cnts[j]
-            
-            for k in range(cnt):
-                handle_id = handles[handles_offset + k]
-                offset = offsets[handle_id]
-                local_offset = local_offsets[handle_id]
-                
-                if local_offset == 0:
-                    perf = (perf_base - CENTER) * 1.5 + CENTER
-                    ratings[offset + local_offset] = CENTER
-                else:
-                    perf = perf_base
-                    den = dens[handle_id]
-                    last_sum = g(ratings[offset + local_offset - 1]) * den
-                    rperf = min(perfs[offset + local_offset - 1], RATEDBOUND + 400)
-                    ratings[offset + local_offset] = ginv((0.9 * (last_sum + g(rperf))) / (0.9 * (1 + den)))
-                
-                perfs[offset + local_offset] = perf
-                nums[handle_id] = 0.9 * (perf + nums[handle_id])
-                dens[handle_id] = 0.9 * (1 + dens[handle_id])
-                aperfs[handle_id] = nums[handle_id] / dens[handle_id]
-                
-            handles_offset += cnt
-            
-        # move user ratings to one place
-        for j in range(standings_len):
-            handle_id = handle_ids[standings_offset + j]
-            offset = offsets[handle_id]
-            local_offset = local_offsets[handle_id]
-            current_ranks[standings_offset + j] = ratings[offset + local_offset]
-            local_offsets[handle_id] += 1
-            
-        standings_offset += standings_len
-    
-    return nums, dens, aperfs, perfs, ratings, offsets, local_offsets, current_ranks
-
-
-@njit(fastmath=True)
-def calculate_errors(err_fun, standings_lens, ranks, current_ranks, Is, verbose=True):
-    standings_cnt = len(standings_lens)
-    current_ranks = current_ranks.copy()
-    errors = np.empty(standings_cnt, dtype=np.float64)
-    
-    standings_offset = 0
-    standings_left = standings_cnt
-    
-    for i in range(standings_cnt):
-        if verbose:
-            print("Standings left:", standings_left)
-        standings_left -= 1
-        standings_len = standings_lens[i]
-        
-        # replace ratings with ranks
-        j = 0
-        while j < standings_len:
-            current_rank = current_ranks[Is[standings_offset + j]]
-            k = j
-            while k + 1 < standings_len and current_ranks[Is[standings_offset + k + 1]] == current_rank:
-                k += 1
-            first = j + 1
-            last = k + 1
-            current_ranks[Is[standings_offset + j:standings_offset + k + 1]] = (first + last) / 2
-            j = k + 1
-        
-        # calculate errors
-        err = 0
-        for j in range(standings_len):
-            real_rank = ranks[standings_offset + j]
-            expected_rank = current_ranks[standings_offset + j]
-            err += err_fun(real_rank, expected_rank)
-        errors[i] = err / standings_len
-        
-        standings_offset += standings_len
-        
-    return errors
-
-
 # Additional return value of AtCoderRatingSystem, which has all calculations, meaningful variables (pretty specific stuff)
 class Result:
     def __init__(self, consider, handle_to_id, id_to_handle, sorted_standings, handle_ids, ranks, standings_lens,
@@ -396,7 +152,239 @@ class Result:
 #       errors: dictionary of: error_function_name -> (dictionary of: contest id -> error calculated with that function)
 # - consider only `consider` first contests, if consider == -1, all contests are taken
 # - `err_fun` parameter is one function or list of functions to calculate error with
-def AtCoderRatingSystem(db, err_fun=None, consider=50, verbose=False, **kwargs):
+# actual, main function
+def AtCoderRatingSystem(db, err_fun=None,
+                        g_base=2, g_power_div=800, binsearch_base=6, binsearch_power_div=400, decay=0.9,
+                        consider=50, verbose=False, **kwargs):
+    
+    CENTER = 1200
+    RATEDBOUND = np.inf
+    
+    @njit(fastmath=True)
+    def atcoder_calculate(handle_ids, ranks, standings_lens, user_contest_cnt,
+                          verbose=True):
+        user_cnt = len(user_contest_cnt)
+        standings_cnt = len(standings_lens)
+        history_cnt = len(handle_ids)
+
+        def g(x):
+            return np.power(g_base, x / g_power_div)
+
+        def ginv(y):
+            return g_power_div * np.log(y) / np.log(g_base)
+
+        # AtCoder stuff
+        ranks = ranks.copy().astype(np.float64)
+        nums = np.zeros(user_cnt, dtype=np.float64)
+        dens = np.zeros(user_cnt, dtype=np.float64)
+        aperfs = np.full(user_cnt, CENTER, dtype=np.float64)
+        perfs = np.empty(history_cnt, dtype=np.float64)
+        ratings = np.zeros(history_cnt, dtype=np.float64)
+        offsets = np.cumsum(user_contest_cnt) - user_contest_cnt
+        local_offsets = np.zeros(user_cnt, dtype=np.int32)
+        current_ranks = np.empty_like(ranks, dtype=np.float64)
+
+        # parallel binsearch stuff
+        ls = np.empty(np.max(standings_lens), dtype=np.float64)
+        rs = np.empty(np.max(standings_lens), dtype=np.float64)
+        cnts = np.empty(np.max(standings_lens), dtype=np.int32)
+        handles = np.empty(np.max(standings_lens), dtype=np.int32)
+        ls_next = np.empty_like(ls)
+        rs_next = np.empty_like(rs)
+        cnts_next = np.empty_like(cnts)
+        handle_to_rank = np.empty(user_cnt, dtype=np.int32)
+
+        standings_offset = 0
+        standings_left = len(standings_lens)
+
+        for i in range(standings_cnt):
+            if verbose:
+                print("Standings left:", standings_left)
+            standings_left -= 1
+            standings_len = standings_lens[i]
+
+            # fix ranks
+            j = 0
+            while j < standings_len:
+                rank = ranks[standings_offset + j]
+                k = j
+                while k + 1 < standings_len and ranks[standings_offset + k + 1] == rank:
+                    k += 1
+                ranks[j:k + 1] = (2 * rank + k - j) / 2
+                j = k + 1
+
+            # create handle -> rank mapping given current standings
+            slice_l, slice_r = standings_offset, standings_offset + standings_len
+            handle_to_rank[handle_ids[slice_l:slice_r]] = ranks[slice_l:slice_r]
+
+            # prepare to parallel binsearch
+            ls[0], rs[0] = 0, 5000
+            cnts[0] = standings_len
+            handles[:standings_len] = handle_ids[slice_l:slice_r]
+            segs, segs_next = 1, 0
+            handles_offset = 0
+            max_iters = 80
+
+            # do parallel binsearch
+            for j in range(max_iters):
+                updated = False
+
+                for k in range(segs):
+                    l, r = ls[k], rs[k]
+                    cnt = cnts[k]
+
+                    if (r - l) <= 1e-1:
+                        ls_next[segs_next] = l
+                        rs_next[segs_next] = r
+                        cnts_next[segs_next] = cnt
+                        handles_offset += cnt
+                        segs_next += 1
+                    else:
+                        updated = True
+                        m = (l + r) / 2
+
+                        val = 0.0
+                        for t in range(standings_len):
+                            handle_id = handle_ids[standings_offset + t]
+                            aperf = aperfs[handle_id]
+                            val += 1 / (1 + np.power(binsearch_base, (m - aperf) / binsearch_power_div))
+
+                        lit, rit = handles_offset, handles_offset + cnt - 1
+                        lefts, rights = 0, 0
+                        while lit < rit:
+                            lhandle_id = handles[lit]
+                            lrank = handle_to_rank[lhandle_id]
+                            if val <= lrank - 0.5:
+                                lit += 1
+                                lefts += 1
+                                continue
+
+                            rhandle_id = handles[rit]
+                            rrank = handle_to_rank[rhandle_id]
+                            if val > rrank - 0.5:
+                                rit -= 1
+                                rights += 1
+                                continue
+
+                            lefts += 1
+                            rights += 1
+                            handles[lit], handles[rit] = handles[rit], handles[lit]
+                            lit += 1
+                            rit -= 1
+
+                        if lit == rit:
+                            handle_id = handles[lit]
+                            rank = handle_to_rank[handle_id]
+                            if val <= rank - 0.5:
+                                lefts += 1
+                            else:
+                                rights += 1
+
+                        if lefts > 0:
+                            ls_next[segs_next] = l
+                            rs_next[segs_next] = m
+                            cnts_next[segs_next] = lefts
+                            segs_next += 1
+
+                        if rights > 0:
+                            ls_next[segs_next] = m
+                            rs_next[segs_next] = r
+                            cnts_next[segs_next] = rights
+                            segs_next += 1
+
+                        handles_offset += cnt
+
+                if not updated:
+                    break
+
+                segs = segs_next
+                ls[:segs] = ls_next[:segs]
+                rs[:segs] = rs_next[:segs]
+                cnts[:segs] = cnts_next[:segs]
+                segs_next = 0
+                handles_offset = 0
+
+            # calculate perfs, ratings, ... after parallel binsearch
+            handles_offset = 0
+            for j in range(segs):
+                perf_base = ls[j]
+                cnt = cnts[j]
+
+                for k in range(cnt):
+                    handle_id = handles[handles_offset + k]
+                    offset = offsets[handle_id]
+                    local_offset = local_offsets[handle_id]
+
+                    if local_offset == 0:
+                        perf = (perf_base - CENTER) * 1.5 + CENTER
+                        ratings[offset + local_offset] = CENTER
+                    else:
+                        perf = perf_base
+                        den = dens[handle_id]
+                        last_sum = g(ratings[offset + local_offset - 1]) * den
+                        rperf = min(perfs[offset + local_offset - 1], RATEDBOUND + 400)
+                        ratings[offset + local_offset] = ginv((decay * (last_sum + g(rperf))) / (decay * (1 + den)))
+
+                    perfs[offset + local_offset] = perf
+                    nums[handle_id] = decay * (perf + nums[handle_id])
+                    dens[handle_id] = decay * (1 + dens[handle_id])
+                    aperfs[handle_id] = nums[handle_id] / dens[handle_id]
+
+                handles_offset += cnt
+
+            # move user ratings to one place
+            for j in range(standings_len):
+                handle_id = handle_ids[standings_offset + j]
+                offset = offsets[handle_id]
+                local_offset = local_offsets[handle_id]
+                current_ranks[standings_offset + j] = ratings[offset + local_offset]
+                local_offsets[handle_id] += 1
+
+            standings_offset += standings_len
+
+        return nums, dens, aperfs, perfs, ratings, offsets, local_offsets, current_ranks
+
+    @njit(fastmath=True)
+    def calculate_errors(err_fun, standings_lens, ranks, current_ranks, Is, verbose=True):
+        standings_cnt = len(standings_lens)
+        current_ranks = current_ranks.copy()
+        errors = np.empty(standings_cnt, dtype=np.float64)
+
+        standings_offset = 0
+        standings_left = standings_cnt
+
+        for i in range(standings_cnt):
+            if verbose:
+                print("Standings left:", standings_left)
+            standings_left -= 1
+            standings_len = standings_lens[i]
+
+            # replace ratings with ranks
+            j = 0
+            while j < standings_len:
+                current_rank = current_ranks[Is[standings_offset + j]]
+                k = j
+                while k + 1 < standings_len and current_ranks[Is[standings_offset + k + 1]] == current_rank:
+                    k += 1
+                first = j + 1
+                last = k + 1
+                current_ranks[Is[standings_offset + j:standings_offset + k + 1]] = (first + last) / 2
+                j = k + 1
+
+            # calculate errors
+            err = 0
+            for j in range(standings_len):
+                real_rank = ranks[standings_offset + j]
+                expected_rank = current_ranks[standings_offset + j]
+                err += err_fun(real_rank, expected_rank)
+            errors[i] = err / standings_len
+
+            standings_offset += standings_len
+
+        return errors
+    
+
+    ################ actual function ################
     global handle_to_id, id_to_handle, sorted_standings, handle_ids, ranks, standings_lens, user_contest_cnt
     # get data in familiar form
     if not "handle_to_id" in globals():
@@ -421,7 +409,8 @@ def AtCoderRatingSystem(db, err_fun=None, consider=50, verbose=False, **kwargs):
         get_first_K_contests(consider, handle_ids, ranks, standings_lens, user_contest_cnt)
     t = time.time()
     nums, dens, aperfs, perfs, ratings, offsets, local_offsets, current_ranks = \
-        atcoder_calculate(K_handle_ids, K_ranks, K_standings_lens, K_user_contest_cnt, verbose=verbose)
+        atcoder_calculate(K_handle_ids, K_ranks, K_standings_lens, K_user_contest_cnt,
+                          verbose=verbose)
     delta = time.time() - t
     print("Calculated in %02dm %02.2fs" % (delta // 60, delta % 60))
     
@@ -470,13 +459,13 @@ if __name__ == "__main__":
     db = LoadDatabase()
     print("Loaded database. Starting calculations ...")
     consider = 500
-    errors, result = AtCoderRatingSystem(db,
+    errors, results = AtCoderRatingSystem(db, 
         err_fun=[linear_err, sqrt_err, squared_err],
-        consider=consider,
-        verbose=True)
+        g_base=2, g_power_div=800, binsearch_base=6, binsearch_power_div=400, decay=0.9,
+        consider=consider, verbose=True)
     print("Calculations ended. Saving results ...")
     filename = "results%d.pickle" % consider
     with open(filename, "wb") as outfile:
-        obj = (errors, result)
+        obj = (errors, results)
         pickle.dump(obj, outfile)
     print("Results saved.")
