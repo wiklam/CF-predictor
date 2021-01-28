@@ -470,12 +470,14 @@ if __name__ == "__main__":
     print("Loading database ...")
     db = LoadDatabase()
     print("Loaded database. Starting calculations ...")
+    consider = 500
     errors, result = AtCoderRatingSystem(db,
         err_fun=[linear_err, sqrt_err, squared_err],
-        consider=50,
+        consider=consider,
         verbose=True)
     print("Calculations ended. Saving results ...")
-    with open("results.pickle", "wb") as outfile:
+    filename = "results%d.pickle" % consider
+    with open(filename, "wb") as outfile:
         obj = (errors, result)
         pickle.dump(obj, outfile)
     print("Results saved.")
