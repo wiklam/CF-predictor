@@ -1,7 +1,6 @@
 from database import Database, LoadDatabase
 from numba import njit, vectorize
 import matplotlib.pyplot as plt
-from atcoder import *
 import numpy as np
 import pickle
 import time
