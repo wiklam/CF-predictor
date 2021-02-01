@@ -1,150 +1,15 @@
-import requests
-import json
-import pickle
-import time
 import re
+import bz2
+import json
+import time
+import pickle
+import requests
+import pandas as pd
 from bs4 import BeautifulSoup as bs
-
-## This script allows you to create a database of all users,
-## contests and active users' contest history. 
-
-## All users are stored as a dictionary with username as a key
-## and UserInfoClass as a value.
-## UserInfoClass fields:
-##      - nick
-##      - country (possibly None)
-##      - city (possibly None)
-##      - organization (possibly None)
-##      - contribution
-##      - rating
-##      - maxRating
-
-## Contests are stored as a dictionary with contestId as a key
-## and ContestInfoClass as a value.
-## ContestInfoClass fields:
-##      - duration (in seconds)
-##      - startTime (in seconds)
-##      - authors (list of usernames, possibly None)
-## We consider only CodeForces (type CF) contests (not IOI or ICPC).
-
-## Contest histories are stored as a dictionary with username as a key
-## and UserContestRatingClass as a value:
-## UserContestRatingClass fields:
-##      - contestId
-##      - rank (user ranking place in that contest)
-##      - oldRating
-##      - newRating
-## We store contest history only for active users (participated in the rated
-## contest during the last month) who participated in at least MIN_CONTESTS.
-
-## Use LoadDataBase function to get database object with users, contests and contestHistory
-## dictionaries described above.
 
 MAX_API_REQUESTS = 5
 API_REQUESTS_INTERVAL = 1
 MIN_CONTESTS = 5
-
-
-class UserContestRatingClass:
-    def __init__(self, contest):
-        self.contestId = contest["contestId"]
-        self.rank = contest["rank"]
-        self.oldRating = contest["oldRating"]
-        self.newRating = contest["newRating"]
-
-    def delta(self):
-        return self.newRating - self.oldRating
-
-    def __str__(self):
-        return 'contestId: %d, rank: %d, oldRating: %d, newRating: %d' % (
-                self.contestId, self.rank, self.oldRating, self.newRating)
-
-
-class ContestInfoClass:
-    def __init__(self, contest):
-        self.duration = contest["durationSeconds"]
-        if "startTimeSeconds" in contest:
-            self.startTime = contest["startTimeSeconds"]
-        else:
-            self.startTime = None
-        if "preparedBy" in contest:
-            self.authors = [contest["preparedBy"]]
-        else:
-            self.authors = FindAuthors(contest["id"])
-
-    def __str__(self):
-        res = 'duration: %dh %02dm' % (self.duration // 3600, self.duration % 3600 // 60)
-        if self.startTime:
-            res += ', startTime: %ds' % (self.startTime,)
-        if self.authors:
-            res += ', authors: %s' % (str(self.authors))
-        return res
-
-
-class UserInfoClass:
-    def __init__(self, user):
-        self.nick = user["handle"]
-        if "country" in user:
-            self.country = user["country"]
-        else:
-            self.country = None
-        if "city" in user:
-            self.city = user["city"]
-        else:
-            self.city = None
-        if "organization" in user:
-            self.organization = user["organization"]
-        else:
-            self.organization = None
-        self.contribution = user["contribution"]
-        self.rating = user["rating"]
-        self.maxRating = user["maxRating"]
-
-    def __str__(self):
-        return 'nick: %s, country: %s, city: %s, organization: %s, contribution: %d, rating: %d, maxRating: %d' % (
-                self.nick, self.country, self.city, self.organization, self.contribution, self.rating, self.maxRating)
-
-
-class UsersContestsDBClass:
-    def __init__(self, users, contests, contestHistory):
-        self.users = users
-        self.contests = contests
-        self.contestHistory = contestHistory
-
-    def getAllUsers(self):
-        return self.users.keys()
-
-    def getActiveUsers(self):
-        return self.contestHistory.keys()
-    
-    def getContestsId(self):
-        return self.contests.keys()
-
-    def getUserContests(self, nick):
-        if nick in self.contestHistory:
-            return [cntst.contestId for cntst in self.contestHistory[nick]]
-        return []
-    
-    def getUserContestsInfo(self, nick):
-        if nick in self.contestHistory:
-            return self.contestHistory[nick]
-        return []
-
-    def getAllAuthors(self):
-        authors = set()
-        for contest in self.contest.values():
-            if contest.authors:
-                authors.update(set(contest.authors))
-        return authors
-
-    def getUserAuthors(self, nick):
-        authors = set()
-        history = self.contestHistory[nick]
-        for entry in history:
-            contest = self.contests[entry.contestId]
-            if contest.authors:
-                authors.update(set(contest.authors))
-        return authors
 
 
 def GetRequestStatusOk(res):
@@ -160,16 +25,16 @@ def GetRequestBody(res):
 def GetRequest(method):
     BlockAPICalls()
     res = requests.get("https://codeforces.com/api/" + method)
-    if not(res):
-        print("Unexpected status code: " + str(res.status_code))
-        quit()
+    if not res:
+        print("Unexpected status code:", str(res.status_code))
     return res.json()
 
 
-def GetUserContestHistory(user):
-    res = GetRequest("user.rating?handle=" + user)
-    if(GetRequestStatusOk(res) == False):
-        return None
+def GetAllUsers():
+    res = GetRequest("user.ratedList?activeOnly=false")
+    if GetRequestStatusOk(res) == False:
+        print("Couldn't download all users")
+        quit()
     return GetRequestBody(res)
 
 
@@ -181,37 +46,40 @@ def GetActiveUsers():
     return GetRequestBody(res)
 
 
-def GetAllUsers():
-    res = GetRequest("user.ratedList?activeOnly=false")
-    if(GetRequestStatusOk(res) == False):
-        print("Couldn't download all users")
-        quit()
-    return GetRequestBody(res)
-
-
-def FindAuthors(contestId):
-    url = "http://codeforces.com/contests/" + str(contestId)
-    res = requests.get(url)
-    content = res.text
-    soup = bs(content, "html.parser")
-    return [tag.text for tag in soup.findAll("a", {"class": re.compile("rated-user*")})]
-
-
-def GetContestsList():
+def GetContests():
     res = GetRequest("contest.list?gym=false")
-    if(GetRequestStatusOk(res) == False):
+    if GetRequestStatusOk(res) == False:
         print("Couldn't download contest list")
         quit()
     res = GetRequestBody(res)
     return list(filter(lambda con: con["phase"] == "FINISHED" and con["type"] == "CF", res))
 
 
-def ContestRatingInfo(usercntst):
-    [cntst.pop('handle') for cntst in usercntst]
-    [cntst.pop('contestName') for cntst in usercntst]
-    [cntst.pop('ratingUpdateTimeSeconds') for cntst in usercntst]
-    return [UserContestRatingClass(cntst) for cntst in usercntst]
+def GetAuthors(contestId):
+    url = "http://codeforces.com/contests/" + str(contestId)
+    res = requests.get(url)
+    content = res.text
+    soup = bs(content, "html.parser")
+    return set(tag.text for tag in soup.findAll("a", {"class": re.compile("rated-user*")}))
 
+
+def GetHistory(user):
+    res = GetRequest("user.rating?handle=" + user)
+    if GetRequestStatusOk(res) == False:
+        return None
+    return GetRequestBody(res)
+
+
+def GetStandings(contestId):
+    res = GetRequest("contest.ratingChanges?contestId=" + str(contestId))
+    if GetRequestStatusOk(res) == False:
+        return None
+    res = GetRequestBody(res)
+    if not res:
+        return None
+    return res
+    
+    
 def BlockAPICalls():
     BlockAPICalls.cnt += 1
     if BlockAPICalls.cnt >= MAX_API_REQUESTS:
@@ -227,119 +95,178 @@ BlockAPICalls.lasttime = time.time()
 BlockAPICalls.now = BlockAPICalls.lasttime
 
 
-def ActiveUserFetch():
-    res = {}
-    users = GetActiveUsers()
-    leftusers = len(users)
-
-    for user in users:
-        leftusers -= 1
-        userName = user['handle']
-        usercntst = GetUserContestHistory(userName)
-        print("Users left " + str(leftusers) + " " + userName)
-
-        if usercntst == None:
-            print("PROBLEM WITH " + userName)
-            with open('error-users.json', 'a') as outfile:
-                json.dump(userName, outfile)
-            continue
-
-        elif len(usercntst) < MIN_CONTESTS:
-            continue
-
-        usercntst = ContestRatingInfo(usercntst)
-        res[userName] = usercntst
-        
-    with open('user-contest-history-info.pickle', 'wb') as outfile:
-        pickle.dump(res, outfile)
-
-
-def AllUserFetch():
-    res = {}
+def FetchUsers():
+    print("Fetching users ...")
     users = GetAllUsers()
+    columns = ["handle", "country", "city", "organization",
+               "contribution", "rating", "maxRating"]
+    users_df = pd.DataFrame(users)[columns].set_index("handle")
+    print("Fetched users")
     
-    for user in users:
-        userName = user['handle']
-        userInfo = UserInfoClass(user)
-        res[userName] = userInfo
+    with open("users.pickle", "wb") as outfile:
+        pickle.dump(users_df, outfile)
+        
+    return users_df.index
+
+        
+def FetchContests():
+    print("Fetching contests ...")
+    contests = GetContests()
+    columns = ["id", "durationSeconds", "startTimeSeconds"]
+    contests_df = pd.DataFrame(contests)[columns].set_index("id")
+    contests_df.columns = ["duration", "startTime"]
+    contests_df["dayTime"] = contests_df["startTime"] % (24 * 60 * 60)
+    authors = []
+    left = len(contests_df)
+    for contestId in contests_df.index:
+        print(f"Contests left: {left}, doing contestId: {contestId}")
+        authors.append(GetAuthors(contestId))
+        left -= 1
+    contests_df["authors"] = authors
+    print("Fetched contests")
+        
+    with open("contests.pickle", "wb") as outfile:
+        pickle.dump(contests_df, outfile)
+        
+    return contests_df.index
     
-    with open('user-info.pickle', 'wb') as outfile:
-        pickle.dump(res, outfile)
-
-
-def ContestFetch():
-    res = {}
-    contests = GetContestsList()
-    cntstleft = len(contests)
     
-    for cntst in contests:
-        cntstleft -= 1
-        contestId = cntst['id']
-        res[contestId] = ContestInfoClass(cntst)
-        print("Contests left", str(cntstleft), contestId)
-
-    with open('contest-info.pickle', 'wb') as outfile:
-        pickle.dump(res, outfile)
-
-
-def CreateDataBase():
-    users = contests = contestHistory = None
-    with open('user-info.pickle', 'rb') as outfile:
-        users = pickle.load(outfile)
-    with open('contest-info.pickle', 'rb') as outfile:
-        contests = pickle.load(outfile)
-    with open('user-contest-history-info.pickle', 'rb') as outfile:
-        contestHistory = pickle.load(outfile)
-    DB = UsersContestsDBClass(users, contests, contestHistory)
-    with open('database.pickle', 'wb') as outfile:
-        pickle.dump(DB, outfile)
-
-
-def CleanDataBase(DB):
-    # add MikeMirzayanov
-    admin = "MikeMirzayanov"
-    DB.users[admin] = {
-        "handle": admin,
-        "country": "Russia",
-        "city": "Saratov",
-        "contribution": 256,
-        "rating": 0,
-        "maxRating": 0
-    }
-
-    # remove authors not in our database
-    for contest in DB.contests.values():
-        if contest.authors:
-            contest.authors = [author for author in contest.authors if author in DB.users]
-
-    # remove contests with no authors
-    DB.contests = {cId: contest for cId, contest in DB.contests.items() if contest.authors}
-
-    # authors as set
-    for contest in DB.contests.values():
-        contest.authors = set(contest.authors)
-
-    # remove contests with no startTime
-    DB.contests = {cId: contest for cId, contest in DB.contests.items() if contest.startTime}
-
-    # remove non existing contest from contestHistory
-    for user, history in DB.contestHistory.items():
-        DB.contestHistory[user] = [entry for entry in history if entry.contestId in DB.contests]
-
-    return DB
+def FetchHistory(handle):
+    history = GetHistory(handle)
+    if history == None:
+        print("ERROR: contest history of user", handle)
+        with open("error.json", "a") as outfile:
+            json.dump(handle, outfile)
+        return None
+    if len(history) < MIN_CONTESTS:
+        return None
+    columns = ["rank", "oldRating", "newRating"]
+    history_df = pd.DataFrame(history)[columns]
+    history_df["delta"] = history_df.newRating - history_df.oldRating
+    return history_df
     
+    
+def FetchAllHistory(handles=None):
+    if handles is None:
+        with open("users.pickle", "rb") as infile:
+            handles = pickle.load(infile).index
 
-def LoadDataBase(clean=True):
-    DB = None
-    with open('database.pickle', 'rb') as outfile:
-        DB = pickle.load(outfile)
-    if clean:
-        DB = CleanDataBase(DB)
-    return DB
+    print("Fetching all history ...")
+    all_history = {}
+    left = len(handles)
+    for handle in handles:
+        print(f"Contest history left: {left}, doing handle: {handle}")
+        history = FetchHistory(handle)
+        left -= 1
+        if history is not None:
+            all_history[handle] = history
+    print("Fetched all history")
+    
+    with open("history.pickle", "wb") as outfile:
+        pickle.dump(all_history, outfile)
+    
+    
+def FetchStandings(contestId):
+    standings = GetStandings(contestId)
+    if standings is None:
+        print("ERROR: standings of contest", contestId)
+        return None
+    columns = ["handle", "rank", "oldRating", "newRating"]
+    standings_df = pd.DataFrame(standings)[columns].set_index("handle")
+    standings_df = standings_df[~standings_df.index.duplicated()]
+    standings_df["delta"] = standings_df.newRating - standings_df.oldRating
+    return standings_df
 
 
-if __name__ == '__main__':
-    ActiveUserFetch()
-    AllUserFetch()
-    ContestFetch()
-    CreateDataBase()
+def FetchAllStandings(contestIds=None):
+    if contestIds is None:
+        with open("contests.pickle", "rb") as infile:
+            contestIds = pickle.load(infile).index
+
+    print("Fetching all standings ...")
+    all_standings = {}
+    left = len(contestIds)
+    for contestId in contestIds:
+        print(f"Standings left: {left}, doing contestId: {contestId}")
+        standings = FetchStandings(contestId)
+        left -= 1
+        if standings is not None:
+            all_standings[contestId] = standings
+    print("Fetched all standings")
+    
+    with bz2.BZ2File("standings.pickle.bz2", "w") as outfile:
+        pickle.dump(all_standings, outfile)
+        
+    
+def FetchAll():
+    handles = FetchUsers()
+    contestIds = FetchContests()
+    FetchAllContestHistory(handles)
+    FetchAllStandings(contestIds)
+    
+    
+class Database:
+    def __init__(self, users, contests, history, standings, clean=True):
+        self.users = users
+        self.contests = contests
+        self.history = history
+        self.standings = standings
+        if clean:
+            self.clean()
+    
+    def clean(self):
+        # be careful - ordering is important
+        self.removeAbsentAuthors()
+        self.removeAbsentUsersWithHistory()
+        self.makeContestsAndStandingsMatch()
+        self.removeUsersWithAbsentContestsInHistory()
+        assert self.allAuthorsArePresent() == True
+        assert self.allUsersWithHistoryArePresent() == True
+        assert self.contestsAndStandingsAreMatched() == True
+        assert self.allContestsInHistoryArePresent() == True
+        
+    def removeAbsentAuthors(self):
+        self.contests.authors = self.contests.authors.map(lambda x: set(a for a in x if a in self.users.index))
+
+    def removeAbsentUsersWithHistory(self):
+        self.history = {handle: v for handle, v in self.history.items() if handle in self.users.index}
+
+    def removeUsersWithAbsentContestsInHistory(self):
+        self.history = {handle: hist for handle, hist in self.history.items()
+                        if all(contestId in self.contests.index for contestId in hist.contestId)}
+
+    def makeContestsAndStandingsMatch(self):
+        commonContests = set(self.contests.index) & set(self.standings.keys())
+        self.standings = {cId: v for cId, v in self.standings.items() if cId in commonContests}
+        self.contests = self.contests.loc[reversed(list(commonContests))]
+
+    def allAuthorsArePresent(self):
+        return all(author in self.users.index for authors in self.contests.authors for author in authors)
+    
+    def allUsersWithHistoryArePresent(self):
+        return all(handle in self.users.index for handle in self.history)
+
+    def allContestsInHistoryArePresent(self):
+        return all(all(contestId in self.contests.index for contestId in hist.contestId) for hist in self.history.values())
+    
+    def contestsAndStandingsAreMatched(self):
+        return all(contestId in self.standings.keys() for contestId in self.contests.index) and \
+               all(contestId in self.contests.index for contestId in self.standings)
+            
+    
+def LoadDatabase(clean=True):
+    users = contests = None
+    history = standings = None
+    with open("users.pickle", "rb") as infile:
+        users = pickle.load(infile)
+    with open("contests.pickle", "rb") as infile:
+        contests = pickle.load(infile)
+    with open("history.pickle", "rb") as infile:
+        history = pickle.load(infile)
+    with bz2.BZ2File("standings.pickle.bz2", "r") as infile:
+        standings = pickle.load(infile)
+    return Database(users, contests, history, standings, clean=clean)
+
+
+if __name__ == "__main__":
+    FetchAll()
