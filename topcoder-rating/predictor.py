@@ -5,16 +5,26 @@ import math
 
 DB = LoadDatabase()
 
-def TopcoderRatingSystem(data, errFun, startRating = 1000, startVolatility = 100, capConstant1 = 150, capConstant2 = 1500, weightConstant1 = 0.42, weightConstant2 = 0.18,
-    weightDecrease = [[2000, 0.9], [2500, 0.8]], verbose = True, **kwargs):
+class contestInfo:
+    def __init__(self, contestId, contestTime, newTopcoderRating, newCodeforcesRating):
+        self.contestId = contestId
+        self.contestTime = contestTime
+        self.newTopcoderRating = newTopcoderRating
+        self.newCodeforcesRating = newCodeforcesRating    
     
-    sortedStandings = [(k, v) for k, v in sorted(data.standings.items(),
-                        key = lambda x: data.contests.loc[x[0]].startTime)]
+    def __str__(self):
+        return '[contest = %d, topcoder rating = %lf, codeforces rating = %d]' % (self.contestId, 
+                                                                                self.newTopcoderRating,
+                                                                                self.newCodeforcesRating)
+    
+def TopcoderRatingSystem(data, errFun, startRating = 1000, startVolatility = 500, capConstant1 = 150, capConstant2 = 1800, weightConstant1 = 0.6, weightConstant2 = 0.3,
+    weightDecrease = [[2000, 0.9], [2500, 0.8]], verbose = True, **kwargs):
 
     contestsIds = list(data.contests.index)
     contestsIds = sorted(contestsIds, key = lambda x: data.contests.loc[x].startTime)
     
     ans, ratings, volatility, matches = {}, {}, {}, {}
+    userHistory = {}
     
     def sqr(a):
         return a * a
@@ -33,6 +43,31 @@ def TopcoderRatingSystem(data, errFun, startRating = 1000, startVolatility = 100
         if user not in volatility:
             volatility[user] = startVolatility
         return volatility[user]
+
+    def pushHistory(user, contestId, rating):
+        if user not in userHistory:
+            userHistory[user] = []
+        userHistory[user].append(contestInfo(contestId, data.contests.loc[contestId].startTime, 
+                                             rating, data.standings[contestId].loc[user].newRating))
+    
+    def getCompetitionFactor(rating, volatility):
+        n = len(rating)
+        avgRating = sum(rating) / n
+        volatilitySum, ratingSum = 0, 0
+        
+        for i in range(n):
+            volatilitySum += sqr(volatility[i])
+            ratingSum += sqr(rating[i] - avgRating)
+        return math.sqrt(volatilitySum / n + ratingSum / (n - 1))
+
+    def getExpectedRank(rating, volatility):
+        expectedRank = [0.5] * n
+        for i in range(n):
+            for j in range(n):
+                tmp = (rating[j] - rating[i]) / math.sqrt(2 * (sqr(volatility[i]) + sqr(volatility[j])))
+                tmp = math.erf(tmp) + 1
+                expectedRank[i] += tmp / 2.
+        return expectedRank
     
     def getWeight(user):
         weight = weightConstant1 / (getMatches(user) + 1)
@@ -58,6 +93,9 @@ def TopcoderRatingSystem(data, errFun, startRating = 1000, startVolatility = 100
         return ret / n
     
     for contest in contestsIds:
+        if contest > 200:
+            break
+
         df = data.standings[contest]
         n = df.shape[0]
         user = list(df.index)
@@ -68,35 +106,18 @@ def TopcoderRatingSystem(data, errFun, startRating = 1000, startVolatility = 100
             oldRating.append(getRating(user[i]))
             oldVolatility.append(getVolatility(user[i]))
 
-        avgRating = 0
-        for i in range(n):
-            avgRating += oldRating[i]
-        avgRating /= n
-        
-        volatilitySum = 0
-        ratingSum = 0
+        competitionFactor = getCompetitionFactor(oldRating, oldVolatility)
+        expectedRank = getExpectedRank(oldRating, oldVolatility)
+        ans[contest] = getError(expectedRank, rank)
         
         for i in range(n):
-            volatilitySum += sqr(oldVolatility[i])
-            ratingSum += sqr(oldRating[i] - avgRating)        
-        competitionFactor = math.sqrt(volatilitySum / n + ratingSum / (n - 1))
-
-        expectedRanks = [0.5] * n
-        for i in range(n):
-            for j in range(n):
-                tmp = (oldRating[j] - oldRating[i]) / math.sqrt(2 * (sqr(oldVolatility[i]) + sqr(oldVolatility[j])))
-                tmp = math.erf(tmp) + 1
-                expectedRanks[i] += tmp / 2.
-        ans[contest] = getError(expectedRanks, rank)
-        
-        for i in range(n):
-            ePerf = -norm.cdf((expectedRanks[i] - 0.5) / n)
-            aPerf = -norm.cdf((rank[i] - 0.5) / n)
+            ePerf = -norm.ppf((expectedRank[i] - 0.5) / n)
+            aPerf = -norm.ppf((rank[i] - 0.5) / n)
+            
             perf = oldRating[i] + competitionFactor * (aPerf - ePerf)
             weight = getWeight(user[i])
             cap = getCap(user[i])
             
-            matches[user[i]] += 1
             
             newRating = (oldRating[i] + weight * perf) / (1 + weight)
             if newRating > oldRating[i] + cap:
@@ -105,16 +126,18 @@ def TopcoderRatingSystem(data, errFun, startRating = 1000, startVolatility = 100
             if oldRating[i] > newRating + cap:
                 newRating = oldRating[i] - cap
             
+            matches[user[i]] += 1
             ratings[user[i]] = newRating
             volatility[user[i]] = math.sqrt(sqr(oldVolatility[i]) / (weight + 1) + sqr(newRating - oldRating[i]) / weight)
-        
-        if verbose:
+            pushHistory(user[i], contest, newRating)
+
+        if verbose and contest % 5 == 0:
             print('done contest %d' % contest)
-    return ans
+    return ans, userHistory
 
 def errFun(a, b):
-    return abs(a - b)
+    return math.log(max(a, b) / min(a, b))
 
-print("DB read")
-tmp = TopcoderRatingSystem(DB, errFun)
-print(tmp)
+contestErrors, userHistory = TopcoderRatingSystem(DB, errFun, capConstant2 = 1500, 
+                                weightConstant1 = 0.5, weightConstant2 = 0.2)
+
