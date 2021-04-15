@@ -1,3 +1,3 @@
 # CF-predictor
 
-Tried to predict the contest results using previous contests data.
+Tried different approaches to predict the contest results knowing the participants using previous contests data.
